@@ -73,10 +73,11 @@
 
 ### ビルド済みバイナリを使う
 
-[Releases](https://github.com/kienn-HCl/fuguruma/releases) から OS / CPU に合ったアーカイブ（linux / macOS / windows、amd64 / arm64）をダウンロードして展開します。Web UI はバイナリに同梱されています。
+[Releases](https://github.com/kienn-HCl/fuguruma/releases) から OS / CPU に合ったアーカイブ（linux / macOS / windows、amd64 / arm64）をダウンロードして展開します。アーカイブと同じ名前のディレクトリに、バイナリ・README・ライセンス・`deploy/`（systemd ユニットと設定例）が入っています。Web UI はバイナリに同梱されています。
 
 ```bash
 tar xzf fuguruma_<version>_linux_amd64.tar.gz
+cd fuguruma_<version>_linux_amd64
 ./fuguruma version
 ```
 
