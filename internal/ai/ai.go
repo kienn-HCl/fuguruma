@@ -85,13 +85,26 @@ const summarizePrompt = `ここまでの会話を、後から読み返す読書�
 - 要点を箇条書きで。冗長な前置きや挨拶は不要
 メモ本文のみを出力してください。`
 
+// summarizeMemoPrompt is used when the summary is added to a memo, which
+// already shows the passage next to it.
+const summarizeMemoPrompt = `ここまでの会話を、選択箇所に付ける短い読書メモとして Markdown で整理してください。
+- 先頭に「### 」で始まる短い見出しを 1 つ
+- 選択箇所はメモに表示済みなので、本文の引用は不要
+- 要点を 2〜5 個の箇条書きで。冗長な前置きや挨拶は不要
+メモ本文のみを出力してください。`
+
 func Chat(ctx context.Context, p Provider, book BookContext, turns []Turn, onDelta func(string)) (string, error) {
 	return p.Stream(ctx, SystemPrompt(book), turns, onDelta)
 }
 
-// Summarize turns a conversation into a Markdown reading note.
-func Summarize(ctx context.Context, p Provider, book BookContext, turns []Turn) (string, error) {
-	turns = append(append([]Turn{}, turns...), Turn{Role: "user", Content: summarizePrompt})
+// Summarize turns a conversation into a Markdown reading note. forMemo asks
+// for a shorter summary without the quoted passage.
+func Summarize(ctx context.Context, p Provider, book BookContext, turns []Turn, forMemo bool) (string, error) {
+	prompt := summarizePrompt
+	if forMemo {
+		prompt = summarizeMemoPrompt
+	}
+	turns = append(append([]Turn{}, turns...), Turn{Role: "user", Content: prompt})
 	return p.Stream(ctx, SystemPrompt(book), turns, nil)
 }
 

@@ -59,10 +59,11 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("PATCH /api/tags/{id}", s.patchTag)
 	m.HandleFunc("DELETE /api/tags/{id}", s.deleteTag)
 
-	m.HandleFunc("GET /api/books/{id}/highlights", s.listHighlights)
-	m.HandleFunc("POST /api/books/{id}/highlights", s.createHighlight)
-	m.HandleFunc("PATCH /api/highlights/{id}", s.patchHighlight)
-	m.HandleFunc("DELETE /api/highlights/{id}", s.deleteHighlight)
+	m.HandleFunc("GET /api/books/{id}/memos", s.listMemos)
+	m.HandleFunc("POST /api/books/{id}/memos", s.createMemo)
+	m.HandleFunc("PATCH /api/memos/{id}", s.patchMemo)
+	m.HandleFunc("DELETE /api/memos/{id}", s.deleteMemo)
+	m.HandleFunc("GET /api/books/{id}/note", s.getBookNote)
 
 	m.HandleFunc("GET /api/notes", s.listNotes)
 	m.HandleFunc("POST /api/notes", s.createNote)
@@ -432,52 +433,56 @@ func (s *Server) deleteTag(w http.ResponseWriter, r *http.Request) {
 
 // ---- highlights ----
 
-func (s *Server) listHighlights(w http.ResponseWriter, r *http.Request) {
-	h, err := s.Store.ListHighlights(r.PathValue("id"))
+func (s *Server) listMemos(w http.ResponseWriter, r *http.Request) {
+	m, err := s.Store.ListMemos(r.PathValue("id"))
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
-	writeJSON(w, h)
+	writeJSON(w, m)
 }
 
-func (s *Server) createHighlight(w http.ResponseWriter, r *http.Request) {
-	var h db.Highlight
-	if !readJSON(w, r, &h) {
+func (s *Server) createMemo(w http.ResponseWriter, r *http.Request) {
+	var m db.Memo
+	if !readJSON(w, r, &m) {
 		return
 	}
-	h.BookID = r.PathValue("id")
-	if len(h.Locator) == 0 {
-		writeErr(w, http.StatusBadRequest, "locator required")
-		return
-	}
-	if err := s.Store.CreateHighlight(&h); err != nil {
+	m.BookID = r.PathValue("id")
+	if _, err := s.Store.GetBook(m.BookID); err != nil {
 		handleErr(w, err)
 		return
 	}
-	writeJSON(w, h)
+	if len(m.Locator) == 0 || string(m.Locator) == "null" {
+		writeErr(w, http.StatusBadRequest, "locator required")
+		return
+	}
+	if err := s.Store.CreateMemo(&m); err != nil {
+		handleErr(w, err)
+		return
+	}
+	writeJSON(w, m)
 }
 
-func (s *Server) patchHighlight(w http.ResponseWriter, r *http.Request) {
-	var body struct{ Color, Comment *string }
+func (s *Server) patchMemo(w http.ResponseWriter, r *http.Request) {
+	var body db.MemoUpdate
 	if !readJSON(w, r, &body) {
 		return
 	}
 	id := r.PathValue("id")
-	if err := s.Store.UpdateHighlight(id, body.Color, body.Comment); err != nil {
+	if err := s.Store.UpdateMemo(id, body); err != nil {
 		handleErr(w, err)
 		return
 	}
-	h, err := s.Store.GetHighlight(id)
+	m, err := s.Store.GetMemo(id)
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
-	writeJSON(w, h)
+	writeJSON(w, m)
 }
 
-func (s *Server) deleteHighlight(w http.ResponseWriter, r *http.Request) {
-	if err := s.Store.DeleteHighlight(r.PathValue("id")); err != nil {
+func (s *Server) deleteMemo(w http.ResponseWriter, r *http.Request) {
+	if err := s.Store.DeleteMemo(r.PathValue("id")); err != nil {
 		handleErr(w, err)
 		return
 	}
@@ -500,10 +505,16 @@ func (s *Server) createNote(w http.ResponseWriter, r *http.Request) {
 	if !readJSON(w, r, &n) {
 		return
 	}
-	if n.BookID != nil && *n.BookID == "" {
-		n.BookID = nil
-	}
 	if err := s.Store.CreateNote(&n); err != nil {
+		handleErr(w, err)
+		return
+	}
+	writeJSON(w, n)
+}
+
+func (s *Server) getBookNote(w http.ResponseWriter, r *http.Request) {
+	n, err := s.Store.BookNote(r.PathValue("id"))
+	if err != nil {
 		handleErr(w, err)
 		return
 	}
@@ -532,7 +543,10 @@ func (s *Server) patchNote(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteNote(w http.ResponseWriter, r *http.Request) {
-	if err := s.Store.DeleteNote(r.PathValue("id")); err != nil {
+	if err := s.Store.DeleteNote(r.PathValue("id")); errors.Is(err, db.ErrBookNote) {
+		writeErr(w, http.StatusConflict, "本のノートは削除できません")
+		return
+	} else if err != nil {
 		handleErr(w, err)
 		return
 	}

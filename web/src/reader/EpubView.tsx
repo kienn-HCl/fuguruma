@@ -1,7 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import ePub, { Book, Contents, NavItem, Rendition } from "epubjs";
 import { Locator } from "../api";
-import { highlightColors, ReaderHandle, ReaderViewProps, surrounding, TocItem } from "./types";
+import { Anchor, highlightColors, ReaderHandle, ReaderViewProps, surrounding, TocItem } from "./types";
 
 const themeColors = {
   light: { fg: "#222222", bg: "#ffffff", link: "#b5523b" },
@@ -21,7 +21,7 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
   const el = useRef<HTMLDivElement>(null);
   const bookRef = useRef<Book>();
   const rendRef = useRef<Rendition>();
-  const applied = useRef(new Map<string, { cfi: string; color: string }>()); // highlight id -> drawn annotation
+  const applied = useRef(new Map<string, { cfi: string; color: string; ul: boolean }>()); // mark id -> drawn annotation
   const [loading, setLoading] = useState(true);
   // Latest props for event handlers registered once at mount.
   const p = useRef(props);
@@ -41,6 +41,27 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
     },
     clearSelection: () => {
       for (const c of (rendRef.current?.getContents() as unknown as Contents[]) ?? []) c.window.getSelection()?.removeAllRanges();
+    },
+    anchors: () => {
+      const out: Record<string, Anchor> = {};
+      const r = rendRef.current;
+      if (!r || !el.current) return out;
+      const box = el.current.getBoundingClientRect();
+      for (const [id, a] of applied.current) {
+        let range: Range | null = null;
+        try {
+          range = r.getRange(a.cfi) ?? null;
+        } catch { /* section not displayed */ }
+        const frame = range?.startContainer.ownerDocument?.defaultView?.frameElement;
+        if (!range || !frame) continue;
+        const fr = frame.getBoundingClientRect();
+        const line = [...range.getClientRects()]
+          .filter((c) => c.width > 1)
+          .map((c) => ({ left: fr.left + c.left, top: fr.top + c.top, right: fr.left + c.right, bottom: fr.top + c.bottom }))
+          .find((c) => c.right > box.left + 1 && c.left < box.right - 1 && c.bottom > box.top && c.top < box.bottom);
+        if (line) out[id] = line;
+      }
+      return out;
     },
   }));
 
@@ -70,7 +91,9 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
       const hasLocs = book.locations.length() > 0;
       const pct = hasLocs ? book.locations.percentageFromCfi(loc.start.cfi) : null;
       p.current.onRelocate({ type: "epub", cfi: loc.start.cfi }, pct, chapterLabel(loc.start.href));
+      p.current.onLayout?.();
     });
+    rendition.on("rendered", () => p.current.onLayout?.());
 
     rendition.on("selected", (cfiRange: string, contents: Contents) => {
       const range = rendition.getRange(cfiRange);
@@ -184,7 +207,10 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
     const ro = new ResizeObserver(() => {
       clearTimeout(t);
       // Called without arguments, epub.js measures the container itself (the typings require sizes).
-      t = window.setTimeout(() => (rendRef.current as unknown as { resize(): void } | undefined)?.resize(), 150);
+      t = window.setTimeout(() => {
+        (rendRef.current as unknown as { resize(): void } | undefined)?.resize();
+        p.current.onLayout?.();
+      }, 150);
     });
     ro.observe(el.current!);
     return () => {
@@ -196,30 +222,43 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
   // Settings changes.
   useEffect(() => {
     if (rendRef.current && !loading) applyTheme(rendRef.current, props.settings);
+    p.current.onLayout?.();
   }, [props.settings, loading]);
 
   // Sync highlight annotations with props.
   useEffect(() => {
     const r = rendRef.current;
     if (!r || loading) return;
-    const want = new Map(props.highlights.filter((h) => h.locator.type === "epub").map((h) => [h.id, h]));
+    const want = new Map(props.marks.filter((m) => m.locator.type === "epub").map((m) => [m.id, m]));
     for (const [id, a] of applied.current) {
-      const h = want.get(id);
-      if (!h || (h.locator.type === "epub" && h.locator.cfi !== a.cfi) || h.color !== a.color) {
+      const m = want.get(id);
+      if (!m || (m.locator.type === "epub" && m.locator.cfi !== a.cfi) || m.color !== a.color || m.annotated !== a.ul) {
         r.annotations.remove(a.cfi, "highlight");
+        if (a.ul) r.annotations.remove(a.cfi, "underline");
         applied.current.delete(id);
       }
     }
-    for (const [id, h] of want) {
-      if (applied.current.has(id) || h.locator.type !== "epub") continue;
-      r.annotations.highlight(h.locator.cfi, { id }, () => p.current.onHighlightClick(id), "fuguruma-hl", {
-        fill: highlightColors[h.color] ?? h.color,
+    for (const [id, m] of want) {
+      if (applied.current.has(id) || m.locator.type !== "epub") continue;
+      const color = highlightColors[m.color] ?? m.color;
+      r.annotations.highlight(m.locator.cfi, { id }, () => p.current.onMarkClick(id), "fuguruma-hl", {
+        fill: color,
         "fill-opacity": "0.45",
         "mix-blend-mode": "multiply",
       });
-      applied.current.set(id, { cfi: h.locator.cfi, color: h.color });
+      // Passages with a memo get an underline, so they stand out where the margin is not shown.
+      if (m.annotated) {
+        r.annotations.underline(m.locator.cfi, { id }, () => p.current.onMarkClick(id), "fuguruma-ul", {
+          stroke: color,
+          "stroke-opacity": "1",
+          "stroke-width": "2",
+          "mix-blend-mode": "multiply",
+        });
+      }
+      applied.current.set(id, { cfi: m.locator.cfi, color: m.color, ul: m.annotated });
     }
-  }, [props.highlights, loading]);
+    p.current.onLayout?.();
+  }, [props.marks, loading]);
 
   return (
     <div className="epub-reader">

@@ -210,7 +210,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pdf-page { position: relative; background: #fff; box-shadow: var(--shadow); margin: auto; }
 .pdf-page canvas { display: block; }
 .pdf-hl { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
-.pdf-hl div { position: absolute; mix-blend-mode: multiply; pointer-events: auto; cursor: pointer; border-radius: 2px; }
+.pdf-hl div {
+  position: absolute; mix-blend-mode: multiply; pointer-events: auto; cursor: pointer; border-radius: 2px;
+  background: color-mix(in srgb, var(--hl) 50%, transparent);
+}
+.pdf-hl div.annotated { box-shadow: inset 0 -2px 0 var(--hl); border-radius: 2px 2px 0 0; }
 .reader[data-theme="dark"] .pdf-page { filter: invert(0.88) hue-rotate(180deg); }
 
 /* selection popup */
@@ -356,4 +360,83 @@ button, input, select, textarea { font: inherit; color: inherit; }
 }
 .danger-zone { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
 
-/* pinned notes */
+
+button.link { background: none; border: none; padding: 0; color: var(--accent); cursor: pointer; font-family: inherit; text-align: left; }
+a.btn { text-decoration: none; }
+button.link:hover { text-decoration: underline; }
+
+/* ---------- memos ---------- */
+.inline-md { cursor: text; border-radius: 6px; padding: 2px 4px; margin: 0 -4px; min-height: 1.6em; }
+.inline-md:hover { background: color-mix(in srgb, var(--text) 4%, transparent); }
+.inline-md .placeholder { color: var(--muted); font-size: 0.95em; }
+.inline-md-input {
+  display: block; width: 100%; resize: none; overflow: hidden; border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 14px; line-height: 1.7;
+}
+.inline-md-input:focus { outline: 2px solid color-mix(in srgb, var(--accent) 40%, transparent); outline-offset: 0; }
+
+.memo-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;
+  border-top: 3px solid var(--mc);
+}
+.memo-head {
+  display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12px; color: var(--muted);
+  background: color-mix(in srgb, var(--mc) 16%, var(--surface));
+}
+.memo-place { background: none; border: none; padding: 0; font: inherit; color: inherit; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+button.memo-place { cursor: pointer; }
+button.memo-place:hover { color: var(--accent); text-decoration: underline; }
+.memo-badge { font-size: 11px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--text); }
+.memo-card .quote { margin: 10px 12px 0; }
+.memo-card .memo-body { margin: 8px 12px 10px; font-size: 14px; }
+.memo-card .inline-md-input.memo-body { width: calc(100% - 24px); }
+.memo-convs { display: flex; flex-wrap: wrap; gap: 4px; padding: 0 12px 8px; }
+.memo-convs .chip { font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.memo-actions { display: flex; align-items: center; gap: 4px; padding: 4px 8px 6px 12px; border-top: 1px solid var(--border); }
+.memo-actions .dot { width: 16px; height: 16px; border-radius: 50%; padding: 0; cursor: pointer; border: 1px solid var(--border); }
+.memo-actions .dot.on { border: 2px solid var(--text); }
+
+/* margin beside the text (wide screens) */
+.viewer { --margin-w: 320px; }
+.viewer.has-margin .epub-reader, .viewer.has-margin .pdf-view { right: var(--margin-w); }
+.viewer.has-margin .epub-reader > div { max-width: 760px; margin: 0 auto; }
+.memo-margin { position: absolute; top: 0; right: 0; bottom: 0; width: var(--margin-w); overflow: hidden; z-index: 3; }
+.memo-slot { position: absolute; left: 8px; right: 14px; transition: top 0.15s ease-out; }
+.memo-card.margin { box-shadow: var(--shadow); cursor: pointer; }
+.memo-card.margin.active { cursor: default; box-shadow: 0 6px 24px rgb(0 0 0 / 0.18); }
+.memo-card.margin:not(.active) .memo-body { max-height: 9.5em; overflow: hidden; -webkit-mask-image: linear-gradient(#000 70%, transparent); mask-image: linear-gradient(#000 70%, transparent); }
+.memo-card.margin:not(.active) .memo-body:has(.placeholder) { -webkit-mask-image: none; mask-image: none; }
+.memo-card.margin .md h1, .memo-card.margin .md h2, .memo-card.margin .md h3 { font-size: 1em; margin: 0.4em 0 0.2em; }
+.memo-lines { position: absolute; inset: 0; pointer-events: none; z-index: 2; overflow: visible; }
+.memo-lines path { fill: none; stroke: var(--mc); stroke-width: 1.5; opacity: 0.75; }
+.memo-lines path.on { stroke-width: 2; opacity: 1; }
+.reader[data-theme="dark"] .memo-lines path { opacity: 0.55; }
+
+/* bottom sheet for a memo (narrow screens, or with the margin turned off) */
+.memo-sheet {
+  position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(96px + env(safe-area-inset-bottom)); z-index: 25;
+  width: min(560px, calc(100% - 16px)); max-height: 55vh; overflow: auto; border-radius: 12px;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 0.28); background: var(--surface); color: var(--text);
+}
+.memo-sheet .memo-card { border: none; border-radius: 0; }
+.memo-sheet-close { position: absolute; right: 4px; top: 0; z-index: 1; width: 30px; height: 30px; }
+.memo-sheet .memo-head { padding-right: 36px; }
+
+/* the note of a book */
+.book-note { padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 4px; }
+.book-note-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.book-note-head .editor-title { font-size: 18px; }
+.book-note-intro { margin-bottom: 10px; }
+.book-note-item { display: flex; flex-direction: column; }
+.note-insert {
+  align-self: center; margin: 2px 0; border: 1px dashed transparent; background: none; color: var(--muted);
+  font-size: 12px; padding: 2px 10px; border-radius: 999px; cursor: pointer; opacity: 0.35; transition: opacity 0.15s;
+}
+.book-note-item:hover .note-insert, .note-insert:focus-visible { opacity: 1; border-color: var(--border); }
+@media (hover: none) { .note-insert { opacity: 0.8; } }
+.note-text { position: relative; padding: 2px 28px 2px 2px; }
+.note-text-del { position: absolute; right: 0; top: 0; width: 26px; height: 26px; opacity: 0; font-size: 14px; }
+.note-text:hover .note-text-del, .note-text:focus-within .note-text-del { opacity: 0.7; }
+@media (hover: none) { .note-text-del { opacity: 0.5; } }
+.editor-scroll { flex: 1; overflow: auto; min-height: 0; }
+.editor-scroll .book-note { max-width: 760px; margin: 0 auto; }

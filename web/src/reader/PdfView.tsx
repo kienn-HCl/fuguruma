@@ -2,7 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useSta
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import { Locator } from "../api";
 import { openPdf, pdfjs } from "./pdfjs";
-import { highlightColors, ReaderHandle, ReaderViewProps, surrounding, TocItem } from "./types";
+import { Anchor, highlightColors, ReaderHandle, ReaderViewProps, surrounding, TocItem } from "./types";
 import "./textlayer.css";
 
 type OutlineNode = { title: string; dest: string | unknown[] | null; items: OutlineNode[] };
@@ -56,7 +56,23 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
     },
     goToPercent: (pct: number) => go(Math.round(pct * num) || 1),
     clearSelection: () => window.getSelection()?.removeAllRanges(),
-  }), [next, prev, go, num]);
+    anchors: () => {
+      const out: Record<string, Anchor> = {};
+      const pe = pageEl.current;
+      const sc = scroller.current;
+      if (!pe || !sc || !doc) return out;
+      const pr = pe.getBoundingClientRect();
+      const box = sc.getBoundingClientRect();
+      for (const m of p.current.marks) {
+        if (m.locator.type !== "pdf" || m.locator.page !== page || !m.locator.rects?.length) continue;
+        const line = m.locator.rects
+          .map(([x, y, w, h]) => ({ left: pr.left + x * pr.width, top: pr.top + y * pr.height, right: pr.left + (x + w) * pr.width, bottom: pr.top + (y + h) * pr.height }))
+          .find((c) => c.bottom > box.top && c.top < box.bottom && c.right > box.left && c.left < box.right);
+        if (line) out[m.id] = line;
+      }
+      return out;
+    },
+  }), [next, prev, go, num, doc, page]);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +133,7 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
       pageText.current = tc.items.map((i) => ("str" in i ? i.str + (i.hasEOL ? "\n" : "") : "")).join("");
       const tl = textEl.current!;
       tl.replaceChildren();
+      p.current.onLayout?.();
       await new pdfjs.TextLayer({ textContentSource: tc, container: tl, viewport }).render();
     })();
     p.current.onRelocate({ type: "pdf", page }, page / (doc.numPages || 1), `${page} / ${doc.numPages}`);
@@ -186,13 +203,15 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
     else p.current.onCenterTap();
   };
 
-  const hls = props.highlights.filter((h) => h.locator.type === "pdf" && h.locator.page === page);
+  const hls = props.marks.filter((m) => m.locator.type === "pdf" && m.locator.page === page);
+  useEffect(() => p.current.onLayout?.(), [props.marks]);
 
   return (
     <div
       className="pdf-view"
       ref={scroller}
       onClick={onClick}
+      onScroll={() => p.current.onLayout?.()}
       onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() })}
       onTouchEnd={(e) => {
         if (zoom > 1 || window.getSelection()?.toString()) return;
@@ -206,17 +225,18 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
       <div className="pdf-page" ref={pageEl} style={{ visibility: doc ? "visible" : "hidden" }}>
         <canvas ref={canvasEl} />
         <div className="pdf-hl">
-          {hls.flatMap((h) =>
-            (h.locator.type === "pdf" ? h.locator.rects ?? [] : []).map((r, i) => (
+          {hls.flatMap((m) =>
+            (m.locator.type === "pdf" ? m.locator.rects ?? [] : []).map((r, i) => (
               <div
-                key={`${h.id}-${i}`}
+                key={`${m.id}-${i}`}
+                className={m.annotated ? "annotated" : undefined}
                 onClick={(e) => {
                   e.stopPropagation();
-                  p.current.onHighlightClick(h.id);
+                  p.current.onMarkClick(m.id);
                 }}
                 style={{
                   left: `${r[0] * 100}%`, top: `${r[1] * 100}%`, width: `${r[2] * 100}%`, height: `${r[3] * 100}%`,
-                  background: highlightColors[h.color] ?? h.color, opacity: 0.5,
+                  ["--hl" as string]: highlightColors[m.color] ?? m.color,
                 }}
               />
             )),
