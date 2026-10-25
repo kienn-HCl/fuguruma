@@ -11,7 +11,7 @@
     "typecheck": "tsc -b"
   },
   "dependencies": {
-    "dompurify": "3.2.6",
+    "dompurify": "3.4.17",
     "epubjs": "0.3.93",
     "marked": "15.0.12",
     "pdfjs-dist": "4.10.38",
