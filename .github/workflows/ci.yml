@@ -12,19 +12,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Latest patch release of the Go version in go.mod (security fixes to the standard library).
           go-version: "1.26.x"
           check-latest: true
+          cache-dependency-path: go.sum
 
       - name: Build web UI (includes type check)
         working-directory: web
@@ -67,7 +68,7 @@ jobs:
     # Keeps flake.nix buildable; fails when go.mod changes without updating vendorHash.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: cachix/install-nix-action@v31
       - name: nix build
         run: nix build -L
