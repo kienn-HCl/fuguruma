@@ -19,8 +19,8 @@ function flattenToc(items: NavItem[], depth = 0, out: TocItem[] = []): TocItem[]
 
 const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(props, ref) {
   const el = useRef<HTMLDivElement>(null);
-  const bookRef = useRef<Book>();
-  const rendRef = useRef<Rendition>();
+  const bookRef = useRef<Book>(undefined);
+  const rendRef = useRef<Rendition>(undefined);
   const applied = useRef(new Map<string, { cfi: string; color: string; ul: boolean }>()); // mark id -> drawn annotation
   const [loading, setLoading] = useState(true);
   // Latest props for event handlers registered once at mount.

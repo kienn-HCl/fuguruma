@@ -76,15 +76,17 @@ npmPkgs.sort(byName);
 
 // ---- pdf.js data files copied into the frontend ----
 const pdfjs = join(root, "web/node_modules/pdfjs-dist");
+// Every LICENSE* file in a data directory (some hold one per bundled component).
+const allLicenses = (dir) =>
+  readdirSync(join(pdfjs, dir))
+    .filter((f) => f.startsWith("LICENSE"))
+    .sort()
+    .map((f) => ({ file: f, text: readFileSync(join(pdfjs, dir, f), "utf8").trim() }));
 const extras = [
   { name: "pdf.js character maps (pdfjs-dist/cmaps)", texts: licenseTexts(join(pdfjs, "cmaps")) },
-  {
-    name: "pdf.js standard fonts (pdfjs-dist/standard_fonts)",
-    texts: readdirSync(join(pdfjs, "standard_fonts"))
-      .filter((f) => f.startsWith("LICENSE"))
-      .sort()
-      .map((f) => ({ file: f, text: readFileSync(join(pdfjs, "standard_fonts", f), "utf8").trim() })),
-  },
+  { name: "pdf.js standard fonts (pdfjs-dist/standard_fonts)", texts: allLicenses("standard_fonts") },
+  { name: "pdf.js image decoders and colour management (pdfjs-dist/wasm)", texts: allLicenses("wasm") },
+  { name: "pdf.js colour profiles (pdfjs-dist/iccs)", texts: allLicenses("iccs") },
 ];
 
 const missing = [...goMods.values(), ...npmPkgs, ...extras].filter((p) => p.texts.length === 0);

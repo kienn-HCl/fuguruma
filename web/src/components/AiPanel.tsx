@@ -81,7 +81,7 @@ function Chat({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState<"" | "send" | "summarize">("");
   const [title, setTitle] = useState("");
-  const abort = useRef<AbortController>();
+  const abort = useRef<AbortController>(undefined);
   const bottom = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

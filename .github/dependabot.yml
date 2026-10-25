@@ -13,6 +13,12 @@ updates:
     schedule:
       interval: weekly
     groups:
+      # Packages that only work at matching versions are updated together,
+      # including major versions (a lone react-dom or plugin-react bump fails).
+      react:
+        patterns: ["react", "react-dom", "@types/react", "@types/react-dom"]
+      vite:
+        patterns: ["vite", "@vitejs/*"]
       npm:
         update-types: [minor, patch]
 

@@ -16,6 +16,9 @@ export function openPdf(url: string) {
     cMapUrl: "/pdfjs/cmaps/",
     cMapPacked: true,
     standardFontDataUrl: "/pdfjs/standard_fonts/",
+    // Decoders for JPEG 2000 / JBIG2 images and colour profiles.
+    wasmUrl: "/pdfjs/wasm/",
+    iccUrl: "/pdfjs/iccs/",
   }).promise;
 }
 
@@ -32,9 +35,9 @@ export async function renderPdfCover(url: string, width = 360): Promise<Blob> {
     const ctx = canvas.getContext("2d")!;
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    await page.render({ canvas, viewport }).promise;
     return await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error("toBlob"))), "image/jpeg", 0.85));
   } finally {
-    doc.destroy();
+    doc.loadingTask.destroy();
   }
 }
