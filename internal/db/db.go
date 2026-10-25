@@ -65,17 +65,20 @@ var migrations = []string{
 		percent REAL NOT NULL DEFAULT 0,
 		updated_at INTEGER NOT NULL
 	);
-	CREATE TABLE highlights (
+	CREATE TABLE memos (
 		id TEXT PRIMARY KEY,
 		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+		kind TEXT NOT NULL DEFAULT 'highlight',
 		locator TEXT NOT NULL,
+		label TEXT NOT NULL DEFAULT '',
 		text TEXT NOT NULL,
 		color TEXT NOT NULL DEFAULT 'yellow',
-		comment TEXT NOT NULL DEFAULT '',
+		body TEXT NOT NULL DEFAULT '',
+		sort REAL NOT NULL DEFAULT 0,
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL
 	);
-	CREATE INDEX highlights_book ON highlights(book_id);
+	CREATE INDEX memos_book ON memos(book_id);
 	CREATE TABLE notes (
 		id TEXT PRIMARY KEY,
 		book_id TEXT REFERENCES books(id) ON DELETE SET NULL,
@@ -84,7 +87,7 @@ var migrations = []string{
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL
 	);
-	CREATE INDEX notes_book ON notes(book_id);
+	CREATE UNIQUE INDEX notes_one_per_book ON notes(book_id) WHERE book_id IS NOT NULL;
 	CREATE TABLE conversations (
 		id TEXT PRIMARY KEY,
 		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -92,6 +95,7 @@ var migrations = []string{
 		passage TEXT NOT NULL DEFAULT '',
 		context TEXT NOT NULL DEFAULT '',
 		locator TEXT NOT NULL DEFAULT '',
+		memo_id TEXT REFERENCES memos(id) ON DELETE SET NULL,
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL
 	);
@@ -105,21 +109,6 @@ var migrations = []string{
 	);
 	CREATE INDEX messages_conv ON messages(conversation_id, created_at);`,
 
-	// Highlights become memos: a quoted passage with a Markdown body, or a
-	// free text block placed among them in the book's note (kind 'text').
-	// AI conversations can belong to a memo, and each book has one note.
-	`ALTER TABLE highlights RENAME TO memos;
-	ALTER TABLE memos RENAME COLUMN comment TO body;
-	ALTER TABLE memos ADD COLUMN kind TEXT NOT NULL DEFAULT 'highlight';
-	ALTER TABLE memos ADD COLUMN label TEXT NOT NULL DEFAULT '';
-	ALTER TABLE memos ADD COLUMN sort REAL NOT NULL DEFAULT 0;
-	UPDATE memos SET sort = created_at;
-	DROP INDEX highlights_book;
-	CREATE INDEX memos_book ON memos(book_id);
-	ALTER TABLE conversations ADD COLUMN memo_id TEXT REFERENCES memos(id) ON DELETE SET NULL;
-	UPDATE notes SET book_id = NULL WHERE book_id IS NOT NULL AND rowid NOT IN
-		(SELECT MIN(rowid) FROM notes WHERE book_id IS NOT NULL GROUP BY book_id);
-	CREATE UNIQUE INDEX notes_one_per_book ON notes(book_id) WHERE book_id IS NOT NULL;`,
 }
 
 func (s *Store) migrate() error {
