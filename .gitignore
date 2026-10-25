@@ -1,0 +1,8 @@
+bin/
+data/
+books/
+config/
+config.toml
+*.db
+.env
+/dist/

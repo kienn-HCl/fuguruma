@@ -1,0 +1,16 @@
+# Per-user systemd unit (e.g. on your own PC):
+#   install -D -m 644 deploy/fuguruma.user.service ~/.config/systemd/user/fuguruma.service
+#   systemctl --user daemon-reload && systemctl --user enable --now fuguruma
+[Unit]
+Description=Fuguruma - self-hosted ebook reader (user)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/fuguruma -config %h/.config/fuguruma/config.toml
+EnvironmentFile=-%h/.config/fuguruma/env
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target
