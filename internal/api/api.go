@@ -520,11 +520,20 @@ func (s *Server) getNote(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) patchNote(w http.ResponseWriter, r *http.Request) {
-	var body struct{ Title, Body *string }
+	var body struct {
+		Title        *string         `json:"title"`
+		Body         *string         `json:"body"`
+		Locator      json.RawMessage `json:"locator"` // absent: unchanged; null: unpin
+		LocatorLabel *string         `json:"locatorLabel"`
+	}
 	if !readJSON(w, r, &body) {
 		return
 	}
-	if err := s.Store.UpdateNote(r.PathValue("id"), body.Title, body.Body); err != nil {
+	u := db.NoteUpdate{Title: body.Title, Body: body.Body, LocatorLabel: body.LocatorLabel}
+	if len(body.Locator) > 0 {
+		u.Locator = &body.Locator
+	}
+	if err := s.Store.UpdateNote(r.PathValue("id"), u); err != nil {
 		handleErr(w, err)
 		return
 	}

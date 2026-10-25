@@ -195,7 +195,7 @@ func (s *Server) saveToNote(conv *db.Conversation, noteID, md string) (*db.Note,
 			body += "\n\n---\n\n"
 		}
 		body += md
-		if err := s.Store.UpdateNote(n.ID, nil, &body); err != nil {
+		if err := s.Store.UpdateNote(n.ID, db.NoteUpdate{Body: &body}); err != nil {
 			return nil, err
 		}
 		return s.Store.GetNote(n.ID)

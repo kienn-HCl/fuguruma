@@ -44,6 +44,8 @@ export interface ReaderViewProps {
   onHighlightClick(id: string): void;
   /** Tap in the middle of the page. */
   onCenterTap(): void;
+  /** PDF only: zoom factor relative to fitting the page (1 = fit). */
+  zoom?: number;
 }
 
 export const highlightColors: Record<string, string> = {

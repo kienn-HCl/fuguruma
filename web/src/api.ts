@@ -51,6 +51,10 @@ export interface Note {
   bookTitle?: string;
   title: string;
   body: string;
+  /** Position in the book the note is pinned to (like a sticky note), or null. */
+  locator: Locator | null;
+  /** Human-readable position, e.g. "第三章・42%". */
+  locatorLabel: string;
   createdAt: number;
   updatedAt: number;
 }
@@ -181,8 +185,10 @@ export const api = {
 
   notes: (o: { bookId?: string; q?: string } = {}) => req<Note[]>("GET", `/api/notes${qs(o)}`),
   note: (id: string) => req<Note>("GET", `/api/notes/${id}`),
-  createNote: (n: { bookId?: string | null; title: string; body: string }) => req<Note>("POST", "/api/notes", n),
-  updateNote: (id: string, p: { title?: string; body?: string }) => req<Note>("PATCH", `/api/notes/${id}`, p),
+  createNote: (n: { bookId?: string | null; title: string; body: string; locator?: Locator | null; locatorLabel?: string }) =>
+    req<Note>("POST", "/api/notes", n),
+  updateNote: (id: string, p: { title?: string; body?: string; locator?: Locator | null; locatorLabel?: string }) =>
+    req<Note>("PATCH", `/api/notes/${id}`, p),
   deleteNote: (id: string) => req("DELETE", `/api/notes/${id}`),
 
   conversations: (bookId: string) => req<Conversation[]>("GET", `/api/books/${bookId}/conversations`),
@@ -272,4 +278,9 @@ export function uploadBook(file: File, tagIds: number[], onProgress?: (p: number
     xhr.onerror = () => reject(new UploadError(0, "通信に失敗しました"));
     xhr.send(form);
   });
+}
+
+/** Link that opens a book at the given position (used by pinned notes). */
+export function readerUrl(bookId: string, locator?: Locator | null) {
+  return locator ? `/read/${bookId}?at=${encodeURIComponent(JSON.stringify(locator))}` : `/read/${bookId}`;
 }

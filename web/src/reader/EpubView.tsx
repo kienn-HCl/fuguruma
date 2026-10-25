@@ -222,7 +222,7 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
   }, [props.highlights, loading]);
 
   return (
-    <div className="epub-view">
+    <div className="epub-reader">
       <div ref={el} />
       {loading && <div className="loading">読み込み中…</div>}
     </div>

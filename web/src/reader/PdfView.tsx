@@ -33,7 +33,7 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
   const textEl = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(props.initial?.type === "pdf" ? props.initial.page : 1);
-  const [zoom, setZoom] = useState(1);
+  const zoom = props.zoom ?? 1;
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [error, setError] = useState("");
   const pageText = useRef("");
@@ -223,11 +223,6 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
           )}
         </div>
         <div className="textLayer" ref={textEl} />
-      </div>
-      <div style={{ position: "fixed", right: 16, bottom: 48, display: "flex", gap: 4, zIndex: 3 }} onClick={(e) => e.stopPropagation()}>
-        <button className="btn small" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))}>－</button>
-        <button className="btn small" onClick={() => setZoom(1)}>{Math.round(zoom * 100)}%</button>
-        <button className="btn small" onClick={() => setZoom((z) => Math.min(4, z + 0.25))}>＋</button>
       </div>
     </div>
   );

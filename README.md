@@ -17,6 +17,7 @@
 - 📚 表紙付きの本棚表示、タグでグルーピング、検索・並び替え
 - 📖 EPUB（epub.js）/ PDF（pdf.js、日本語 PDF 対応）リーダー。タップ・スワイプ・キーボードでページ送り
 - 🖍 ハイライト（5 色）＋コメント、Markdown の読書ノート
+- 📍 本文の位置に紐づいたノート（付箋）。ノート一覧から本文のその位置へ戻れる
 - ✦ 選択した文をもとに AI と会話。会話は本ごとに保存され、ノートへ書き出し／AI 要約してから自分で整形できる
   - AI は **Claude API / OpenAI 互換 API（OpenAI・Gemini・OpenRouter・Ollama・LM Studio など）** から選択。Web の設定画面で切り替え可能
 - 🔄 端末間で読書位置を同期（別端末で先に進んでいたら「移動」を提案）
@@ -44,7 +45,7 @@
 
 ![リーダーと AI パネル](docs/screenshots/reader-ai.png)
 
-| 文を選択したときのメニュー | AI の会話を要約してノートに保存 |
+| 文を選択したときのメニュー（ハイライト・付箋・AI など） | ノート（本文の位置へ戻れる） |
 |---|---|
 | ![選択メニュー](docs/screenshots/reader-selection.png) | ![ノート](docs/screenshots/notes.png) |
 
