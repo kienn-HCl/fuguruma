@@ -33,7 +33,8 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
   const textEl = useRef<HTMLDivElement>(null);
   const [doc, setDoc] = useState<PDFDocumentProxy | null>(null);
   const [page, setPage] = useState(props.initial?.type === "pdf" ? props.initial.page : 1);
-  const zoom = props.zoom ?? 1;
+  const zoom = props.zoom ?? "page";
+  const overflowX = useRef(false); // the page is wider than the view (scrolls sideways)
   const [size, setSize] = useState({ w: 0, h: 0 });
   const [error, setError] = useState("");
   const pageText = useRef("");
@@ -106,9 +107,13 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
       const pg = await doc.getPage(page);
       if (cancelled) return;
       const base = pg.getViewport({ scale: 1 });
-      const pad = 24;
-      const fit = Math.min((size.w - pad) / base.width, (size.h - pad) / base.height);
-      const viewport = pg.getViewport({ scale: fit * zoom });
+      const pad = zoom === "width" ? 0 : 24;
+      const fitPage = Math.min((size.w - 24) / base.width, (size.h - 24) / base.height);
+      const fitWidth = (size.w - pad) / base.width;
+      const scale = zoom === "page" ? fitPage : zoom === "width" ? fitWidth : fitPage * zoom;
+      overflowX.current = scale > fitWidth + 0.001;
+      p.current.onZoomChange?.(scale / fitPage);
+      const viewport = pg.getViewport({ scale });
       const dpr = window.devicePixelRatio || 1;
       const canvas = canvasEl.current!;
       canvas.width = Math.floor(viewport.width * dpr);
@@ -142,6 +147,9 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
       task?.cancel();
     };
   }, [doc, page, zoom, size]);
+
+  // A new page starts at its top (pages taller than the view scroll).
+  useEffect(() => scroller.current?.scrollTo(0, 0), [page]);
 
   // Report text selections inside the text layer.
   useEffect(() => {
@@ -197,7 +205,7 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
     if ((e.target as HTMLElement).closest(".pdf-hl div")) return;
     const r = scroller.current!.getBoundingClientRect();
     const rel = (e.clientX - r.left) / r.width;
-    if (zoom > 1 && rel > 0.15 && rel < 0.85) return p.current.onCenterTap();
+    if (overflowX.current && rel > 0.15 && rel < 0.85) return p.current.onCenterTap();
     if (rel < 0.3) prev();
     else if (rel > 0.7) next();
     else p.current.onCenterTap();
@@ -208,13 +216,13 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
 
   return (
     <div
-      className="pdf-view"
+      className={`pdf-view ${zoom === "width" ? "fit-width" : ""}`}
       ref={scroller}
       onClick={onClick}
       onScroll={() => p.current.onLayout?.()}
       onTouchStart={(e) => (touch.current = { x: e.touches[0].clientX, y: e.touches[0].clientY, t: Date.now() })}
       onTouchEnd={(e) => {
-        if (zoom > 1 || window.getSelection()?.toString()) return;
+        if (overflowX.current || window.getSelection()?.toString()) return;
         const dx = e.changedTouches[0].clientX - touch.current.x;
         const dy = e.changedTouches[0].clientY - touch.current.y;
         if (Date.now() - touch.current.t < 600 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy)) (dx < 0 ? next() : prev());

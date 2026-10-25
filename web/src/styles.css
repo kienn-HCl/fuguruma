@@ -190,7 +190,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .reader-toolbar .title { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.75; padding: 0 6px; }
 .reader-toolbar .icon-btn { color: var(--rfg); width: 40px; height: 40px; }
 .reader-toolbar .icon-btn:hover, .reader-toolbar .icon-btn.active { background: color-mix(in srgb, var(--rfg) 10%, transparent); }
-.reader-toolbar .zoom { display: flex; align-items: center; margin-right: 6px; border: 1px solid color-mix(in srgb, var(--rfg) 18%, transparent); border-radius: 10px; }
+.reader-toolbar .zoom { position: relative; display: flex; align-items: center; margin-right: 6px; border: 1px solid color-mix(in srgb, var(--rfg) 18%, transparent); border-radius: 10px; }
 .reader-toolbar .zoom .icon-btn { width: 34px; height: 34px; }
 .reader-toolbar .zoom-level { border: none; background: none; color: var(--rfg); font-size: 12px; min-width: 44px; cursor: pointer; padding: 0; }
 @media (max-width: 480px) {
@@ -207,6 +207,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.6; }
 
 .pdf-view { position: absolute; inset: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 12px; padding-top: max(12px, env(safe-area-inset-top)); }
+.pdf-view.fit-width { padding-left: 0; padding-right: 0; }
 .pdf-page { position: relative; background: #fff; box-shadow: var(--shadow); margin: auto; }
 .pdf-page canvas { display: block; }
 .pdf-hl { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
@@ -234,11 +235,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
   width: 400px; flex: none; display: flex; flex-direction: column; min-height: 0;
   background: var(--surface); color: var(--text); border-left: 1px solid var(--border);
 }
+/* On narrow screens the panel is a sheet above the bottom toolbar, which stays
+   visible: its buttons switch between panels and close the open one. */
 @media (max-width: 899px) {
   .panel {
-    position: fixed; left: 0; right: 0; bottom: 0; width: auto; height: 72vh; z-index: 20;
+    position: absolute; left: 0; right: 0; bottom: 0; width: auto; height: 78%; z-index: 20;
     border-left: none; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 32px rgb(0 0 0 / 0.25);
-    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 .panel-tabs { display: flex; border-bottom: 1px solid var(--border); padding: 0 8px; align-items: center; }
@@ -249,6 +251,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .panel-tabs button.active { color: var(--text); border-bottom-color: var(--accent); }
 .panel-tabs .tab-icon { display: inline-block; min-width: 1.2em; margin-right: 4px; text-align: center; }
 .panel-body { flex: 1; overflow: auto; min-height: 0; }
+@media (max-width: 899px) {
+  .panel-tabs { display: none; }
+  .panel-body { border-radius: 16px 16px 0 0; }
+}
 .list-item { padding: 12px 16px; border-bottom: 1px solid var(--border); cursor: pointer; }
 .list-item:hover { background: var(--surface-2); }
 .quote {
@@ -441,3 +447,11 @@ button.memo-place:hover { color: var(--accent); text-decoration: underline; }
 @media (hover: none) { .note-text-del { opacity: 0.5; } }
 .editor-scroll { flex: 1; overflow: auto; min-height: 0; }
 .editor-scroll .book-note { max-width: 760px; margin: 0 auto; }
+
+.zoom-menu {
+  position: absolute; bottom: calc(100% + 8px); right: 0; z-index: 30; display: grid; gap: 6px; width: 210px; padding: 10px;
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow);
+}
+.zoom-menu .row { gap: 6px; align-items: center; }
+.zoom-menu input { width: 0; flex: 1; text-align: right; }
+.zoom-menu .btn.active { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--surface)); }
