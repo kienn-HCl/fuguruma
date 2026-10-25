@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,20 +17,24 @@ import (
 
 	"golang.org/x/term"
 
-	"github.com/you/fuguruma/internal/ai"
-	"github.com/you/fuguruma/internal/api"
-	"github.com/you/fuguruma/internal/auth"
-	"github.com/you/fuguruma/internal/config"
-	"github.com/you/fuguruma/internal/db"
-	"github.com/you/fuguruma/internal/library"
-	"github.com/you/fuguruma/web"
+	"github.com/kienn-HCl/fuguruma/internal/ai"
+	"github.com/kienn-HCl/fuguruma/internal/api"
+	"github.com/kienn-HCl/fuguruma/internal/auth"
+	"github.com/kienn-HCl/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/db"
+	"github.com/kienn-HCl/fuguruma/internal/library"
+	"github.com/kienn-HCl/fuguruma/web"
 )
+
+// version is set at build time: -ldflags "-X main.version=v1.2.3".
+var version = "dev"
 
 const usage = `Usage: fuguruma [-config FILE] [command]
 
 Commands:
   serve    start the server (default)
   passwd   set or clear the login password in the config file
+  version  print the version
 
 The config file is created with defaults if it does not exist.
 Default path: $FUGURUMA_CONFIG, or ./config.toml
@@ -43,6 +48,10 @@ func main() {
 	cfgPath := flag.String("config", def, "path to config file")
 	flag.Usage = func() { fmt.Fprint(os.Stderr, usage) }
 	flag.Parse()
+	if flag.Arg(0) == "version" {
+		fmt.Println("fuguruma", version)
+		return
+	}
 
 	conf, err := config.Load(*cfgPath)
 	if err != nil {
@@ -132,10 +141,18 @@ func serve(conf *config.Manager) {
 		Handler:           (&api.Server{Store: store, Lib: lib, Auth: a, AI: aiMgr, Conf: conf, Web: web.Dist()}).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
+	if !web.Built() {
+		log.Print("warning: this binary was built without the web UI; run `make build`")
+	}
+	if !a.Enabled() && !loopbackOnly(cfg.Server.Addr) {
+		log.Printf("warning: no login password is set and %s is reachable from other machines; "+
+			"anyone who can reach it can read your notes and change settings. Set one with `fuguruma -config %s passwd`.",
+			cfg.Server.Addr, conf.Path())
+	}
 	go func() {
 		_, provider, _ := aiMgr.Get()
-		log.Printf("fuguruma listening on %s (config=%s books=%s data=%s login=%v ai=%s)",
-			cfg.Server.Addr, conf.Path(), booksDir, dataDir, a.Enabled(), provider)
+		log.Printf("fuguruma %s listening on %s (config=%s books=%s data=%s login=%v ai=%s)",
+			version, cfg.Server.Addr, conf.Path(), booksDir, dataDir, a.Enabled(), provider)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
@@ -149,6 +166,19 @@ func serve(conf *config.Manager) {
 	defer cancel()
 	srv.Shutdown(shutdown)
 	store.DB.Close()
+}
+
+// loopbackOnly reports whether addr only listens on the local machine.
+func loopbackOnly(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // scanLoop scans at startup and then every library.scan_interval (0 = never).

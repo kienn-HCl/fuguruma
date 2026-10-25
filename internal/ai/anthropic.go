@@ -7,7 +7,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
 
-	"github.com/you/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/config"
 )
 
 type anthropicProvider struct {

@@ -19,7 +19,7 @@
   password_hash = ""
 
 [ai]
-  # "none" | "anthropic" | "openai" | "claude-cli"
+  # "none" | "anthropic" | "openai"
   provider = "none"
 
   [ai.anthropic]
@@ -36,10 +36,4 @@
   [ai.openai]
     base_url = "https://api.openai.com/v1"
     api_key = ""
-    model = ""
-
-  # Claude Code on this server (`claude -p`). Uses the CLI's own login.
-  # The command path can only be set here, not from the web UI.
-  [ai.claude_cli]
-    command = "claude"
     model = ""

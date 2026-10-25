@@ -4,6 +4,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -12,12 +13,13 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"sync"
 
-	"github.com/you/fuguruma/internal/ai"
-	"github.com/you/fuguruma/internal/auth"
-	"github.com/you/fuguruma/internal/config"
-	"github.com/you/fuguruma/internal/db"
-	"github.com/you/fuguruma/internal/library"
+	"github.com/kienn-HCl/fuguruma/internal/ai"
+	"github.com/kienn-HCl/fuguruma/internal/auth"
+	"github.com/kienn-HCl/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/db"
+	"github.com/kienn-HCl/fuguruma/internal/library"
 )
 
 type Server struct {
@@ -27,6 +29,9 @@ type Server struct {
 	AI    *ai.Manager
 	Conf  *config.Manager
 	Web   fs.FS // built frontend (index.html + assets)
+
+	logins     *loginLimiter
+	loginsOnce sync.Once
 }
 
 func (s *Server) Handler() http.Handler {
@@ -87,12 +92,23 @@ func (s *Server) Handler() http.Handler {
 		p := r.URL.Path
 		return !strings.HasPrefix(p, "/api/") || p == "/api/status" || p == "/api/login"
 	}
-	return logRequests(s.Auth.Middleware(m, public))
+	// Reject cross-site state-changing requests (CSRF), e.g. a malicious page
+	// POSTing to a Fuguruma instance on the local network.
+	csrf := http.NewCrossOriginProtection()
+	return logRequests(csrf.Handler(s.Auth.Middleware(m, public)))
 }
 
 // spa serves the embedded frontend, falling back to index.html for client routes.
 func (s *Server) spa() http.Handler {
 	files := http.FileServerFS(s.Web)
+	if _, err := fs.Stat(s.Web, "index.html"); err != nil {
+		// Binary compiled without `make web`: explain instead of serving a blank page.
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			io.WriteString(w, "The web UI is not included in this build.\nBuild it with `make build` (or run `npm ci && npm run build` in web/ before `go build`).\n")
+		})
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := strings.TrimPrefix(path.Clean(r.URL.Path), "/")
 		if p == "" {
@@ -163,14 +179,23 @@ func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
+	s.loginsOnce.Do(func() { s.logins = newLoginLimiter() })
+	key := clientKey(r)
+	if ok, wait := s.logins.Allowed(key); !ok {
+		w.Header().Set("Retry-After", strconv.Itoa(int(wait.Seconds())+1))
+		writeErr(w, http.StatusTooManyRequests, fmt.Sprintf("ログインの失敗が続いたため、%d 分後に再試行してください", int(wait.Minutes())+1))
+		return
+	}
 	var body struct{ Password string }
 	if !readJSON(w, r, &body) {
 		return
 	}
 	if !s.Auth.CheckPassword(body.Password) {
+		s.logins.Fail(key)
 		writeErr(w, http.StatusUnauthorized, "パスワードが違います")
 		return
 	}
+	s.logins.Succeed(key)
 	s.Auth.SetSession(w, r)
 	writeJSON(w, map[string]bool{"ok": true})
 }

@@ -3,7 +3,7 @@ package ai
 import (
 	"sync"
 
-	"github.com/you/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/config"
 )
 
 // Manager holds the active provider and rebuilds it when settings change.

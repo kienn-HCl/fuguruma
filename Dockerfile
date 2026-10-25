@@ -20,8 +20,6 @@ FROM gcr.io/distroless/static-debian12:nonroot
 COPY --from=build /fuguruma /fuguruma
 # Paths inside the container are fixed via env; everything else lives in
 # /config/config.toml (created on first start, editable from the web UI).
-# Note: the "claude-cli" AI provider needs the claude CLI, which this minimal
-# image does not contain; use the binary + systemd install for that.
 ENV FUGURUMA_BOOKS_DIR=/books \
     FUGURUMA_DATA_DIR=/data \
     FUGURUMA_ADDR=:8080

@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/you/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/config"
 )
 
 // openaiProvider speaks the OpenAI Chat Completions streaming protocol, which

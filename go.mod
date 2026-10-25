@@ -1,4 +1,4 @@
-module github.com/you/fuguruma
+module github.com/kienn-HCl/fuguruma
 
 go 1.26.0
 

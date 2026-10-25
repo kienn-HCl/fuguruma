@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/you/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/config"
 )
 
 // claudeCLIProvider runs Claude Code headless (`claude -p`) on the server and

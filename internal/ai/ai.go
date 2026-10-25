@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/you/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/config"
 )
 
 type Turn struct {

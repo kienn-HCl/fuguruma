@@ -141,9 +141,10 @@ export default function SettingsPage() {
             {provider === "claude-cli" && (
               <>
                 <p className="small muted">
-                  サーバー上の Claude Code（<code>{s.ai.claudeCli.command}</code>）を <code>claude -p</code> で呼び出します。
-                  サーバーを動かしているユーザーで <code>claude</code> にログイン済み（または <code>CLAUDE_CODE_OAUTH_TOKEN</code> / <code>ANTHROPIC_API_KEY</code> を設定済み）である必要があります。
-                  ツールは無効化して実行します。実行ファイルのパスは設定ファイル（<code>ai.claude_cli.command</code>）でのみ変更できます。
+                  サーバー上の Claude Code（<code>{s.ai.claudeCli.command}</code>）を <code>claude -p</code> で呼び出します（ツールは無効化）。
+                  CLI は <code>ANTHROPIC_API_KEY</code>（API キー）で認証してください。
+                  Claude のサブスクリプション（Free / Pro / Max）の認証情報をこのようなアプリ経由で使うことは、
+                  Anthropic の規約で認められていない場合があります。
                 </p>
                 <Field label="モデル（空欄で CLI の既定）" hint="例: opus, sonnet, claude-opus-5-5">
                   <input className="input" value={cliModel} onChange={(e) => setCliModel(e.target.value)} />

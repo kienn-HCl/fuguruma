@@ -8,8 +8,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/you/fuguruma/internal/ai"
-	"github.com/you/fuguruma/internal/db"
+	"github.com/kienn-HCl/fuguruma/internal/ai"
+	"github.com/kienn-HCl/fuguruma/internal/db"
 )
 
 func (s *Server) listConversations(w http.ResponseWriter, r *http.Request) {

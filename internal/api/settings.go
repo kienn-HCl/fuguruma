@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/you/fuguruma/internal/ai"
-	"github.com/you/fuguruma/internal/auth"
-	"github.com/you/fuguruma/internal/config"
+	"github.com/kienn-HCl/fuguruma/internal/ai"
+	"github.com/kienn-HCl/fuguruma/internal/auth"
+	"github.com/kienn-HCl/fuguruma/internal/config"
 )
 
 // Settings editable from the web UI. [server] and ai.claude_cli.command are

@@ -35,7 +35,7 @@
 │        SQLite (modernc, CGO不要)                   │
 └──────┬──────────────────────────┬─────────────────┘
        │ read-only                 │ HTTPS
-   books_dir (any dir)     AI provider (Claude API / OpenAI互換 / claude -p)
+   books_dir (any dir)     AI provider (Claude API / OpenAI互換)
    config.toml (settings)  data_dir/fuguruma.db (data)
 ```
 
@@ -43,7 +43,7 @@
 |---|---|---|
 | バックエンド | Go 1.26 / 標準 `net/http`（1.22+ のパターンルーティング） | 依存最小。クロスコンパイル容易 |
 | DB | SQLite（`modernc.org/sqlite`, pure Go） | CGO 不要でクロスコンパイル・Docker が簡単 |
-| AI | Claude API: 公式 Go SDK / OpenAI 互換: HTTP（SSE）/ Claude Code: `claude -p` をサブプロセス実行 | プロバイダを差し替え可能な `Provider` インターフェース |
+| AI | Claude API: 公式 Go SDK / OpenAI 互換: HTTP（SSE） | プロバイダを差し替え可能な `Provider` インターフェース |
 | 設定 | TOML（`github.com/BurntSushi/toml`） | 人が編集しやすく、Web からの書き戻しも可能 |
 | フロント | TypeScript + React 18 + Vite | |
 | EPUB 描画 | epub.js | CFI による位置指定・ハイライトが可能 |
@@ -108,7 +108,6 @@
 |---|---|---|
 | `anthropic` | Claude API（公式 Go SDK、ストリーミング、システムプロンプトのキャッシュ） | `fallbacks: "default"` で拒否時に推奨モデルへ自動再試行 |
 | `openai` | OpenAI 互換 Chat Completions（`base_url` + `/chat/completions`、SSE） | OpenAI / Gemini / OpenRouter / Ollama / LM Studio / vLLM 等 |
-| `claude-cli` | サーバー上の `claude -p --output-format stream-json --include-partial-messages` | CLI 側の認証（サブスクリプション / API キー）を利用。**ツール無効**（`--tools ""`）、MCP 無効、セッション非保存、空の作業ディレクトリで実行。会話履歴は毎回プロンプトに展開 |
 | `none` | AI 無効 | |
 
 - 全プロバイダ共通で、システムプロンプト（書名・著者・周辺本文・選択文）と会話履歴を渡し、テキストをストリーミングで返す。
@@ -120,7 +119,6 @@
   - ライブラリ：自動スキャン間隔
   - ログインパスワードの設定・変更・無効化
 - 表示のみ（設定ファイルで変更し再起動）：待受アドレス、本のディレクトリ、データディレクトリ、設定ファイルのパス
-- `ai.claude_cli.command`（実行ファイルのパス）は**設定ファイルでのみ**変更可能（ブラウザから任意コマンドを実行させないため）。
 - API キーはブラウザへ返さない（設定済みかどうかと末尾 4 文字のみ表示）。空欄で保存すると既存のキーを維持し、「削除」で明示的に消去。
 - 環境変数で上書きされている項目は、その旨を表示し編集不可にする。
 
@@ -131,6 +129,9 @@
 - パストラバーサル防止：配信は DB に登録された ID 経由のみ。パスは常に `books_dir` 配下であることを検証。
 - 本ディレクトリは読み取り専用でも動作すること。
 - 設定ファイルは API キーを含むため `0600` で、一時ファイル経由のアトミックな置き換えで保存する。
+- CSRF 対策：状態を変える API（POST / PUT / PATCH / DELETE）は、`Sec-Fetch-Site` / `Origin` ヘッダーでクロスサイトからのリクエストを拒否する（Go 標準の `http.CrossOriginProtection`）。
+- ログイン試行の制限：同じクライアントからの失敗が 15 分以内に 5 回続いたら 15 分間ロックする。リバースプロキシが同一ホスト上にある場合のみ `X-Forwarded-For` を信頼する。
+- ログインが無効のまま外部から到達できるアドレスで待ち受けている場合は、起動時に警告を出す。
 - バックアップ：設定ファイルと `data_dir` をコピーすればよい。
 
 ---
@@ -153,7 +154,7 @@
   password_hash = ""      # bcrypt。空ならログイン不要
 
 [ai]
-  provider = "none"       # none | anthropic | openai | claude-cli
+  provider = "none"       # none | anthropic | openai
   [ai.anthropic]
     api_key = ""
     model = "claude-opus-5-5"
@@ -162,9 +163,6 @@
     base_url = "https://api.openai.com/v1"
     api_key = ""
     model = ""
-  [ai.claude_cli]
-    command = "claude"    # ファイルでのみ変更可
-    model = ""            # 空なら CLI の既定
 ```
 
 ### 5.2 環境変数による上書き
@@ -180,10 +178,11 @@
 ### 5.3 コマンド
 - `fuguruma [-config FILE] [serve]`：サーバー起動
 - `fuguruma [-config FILE] passwd`：ログインパスワードを設定（空入力でログイン無効）
+- `fuguruma version`：バージョンを表示（リリースビルドではタグ名）
 
 ### 5.4 デプロイ形態
 1. **バイナリ + systemd（基本）**：`deploy/fuguruma.service`（システム）/ `deploy/fuguruma.user.service`（ユーザー単位）。専用ユーザー、`StateDirectory=fuguruma`（= `/var/lib/fuguruma`）、`ProtectSystem=strict` で書き込み先を `/var/lib/fuguruma` と `/etc/fuguruma` に限定。
-2. **Docker（任意）**：`/config`（設定）・`/data`（データ）・`/books`（本）をマウント。最小イメージのため `claude-cli` プロバイダは非対応。
+2. **Docker（任意）**：`/config`（設定）・`/data`（データ）・`/books`（本）をマウント。
 
 ---
 
@@ -263,7 +262,7 @@ fuguruma/
 │   ├── db/                     SQLite 接続・マイグレーション・クエリ
 │   ├── library/                スキャナ・EPUB メタデータ/表紙抽出
 │   ├── auth/                   セッション Cookie
-│   ├── ai/                     AI プロバイダ（anthropic / openai / claude-cli）
+│   ├── ai/                     AI プロバイダ（Claude API / OpenAI 互換）
 │   └── api/                    HTTP ハンドラ
 ├── web/                        フロントエンド (Vite + React + TS)
 │   ├── embed.go                dist を go:embed

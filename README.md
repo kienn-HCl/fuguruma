@@ -4,6 +4,11 @@
 
 <h1 align="center">文車 Fuguruma</h1>
 
+<p align="center">
+  <a href="https://github.com/kienn-HCl/fuguruma/actions/workflows/ci.yml"><img src="https://github.com/kienn-HCl/fuguruma/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT License"></a>
+</p>
+
 手持ちの電子書籍（EPUB / PDF）を、スマホ・タブレット・PC のブラウザから同じ UI で読むためのセルフホスト型リーダーです。
 読書位置・ハイライト・読書メモ・AI との会話はすべてサーバーに保存され、全端末で同期されます。
 
@@ -13,7 +18,7 @@
 - 📖 EPUB（epub.js）/ PDF（pdf.js、日本語 PDF 対応）リーダー。タップ・スワイプ・キーボードでページ送り
 - 🖍 ハイライト（5 色）＋コメント、Markdown の読書ノート
 - ✦ 選択した文をもとに AI と会話。会話は本ごとに保存され、ノートへ書き出し／AI 要約してから自分で整形できる
-  - AI は **Claude API / OpenAI 互換 API（OpenAI・Gemini・OpenRouter・Ollama・LM Studio など）/ サーバー上の Claude Code（`claude -p`）** から選択。Web の設定画面で切り替え可能
+  - AI は **Claude API / OpenAI 互換 API（OpenAI・Gemini・OpenRouter・Ollama・LM Studio など）** から選択。Web の設定画面で切り替え可能
 - 🔄 端末間で読書位置を同期（別端末で先に進んでいたら「移動」を提案）
 - 📁 本のファイルを移動・リネームしても、内容の指紋で同じ本として追跡（メモが消えない）
 
@@ -26,6 +31,7 @@
 - [外部からアクセスする場合](#外部からアクセスする場合)
 - [設定](#設定)
 - [構成と開発](#構成と開発)
+- [ライセンス](#ライセンス)
 
 ## スクリーンショット
 
@@ -53,28 +59,39 @@
   <img src="docs/screenshots/mobile-ai.png" width="260" alt="スマホの AI パネル">
 </p>
 
-<sub>サンプルの本は著作権の切れた作品の冒頭部分を使って生成したものです。AI の応答は `claude-cli` プロバイダ（Claude Code）による実際の出力です。</sub>
+<sub>サンプルの本は著作権の切れた作品の冒頭部分を使って生成したものです。AI の応答は Claude による実際の出力です。</sub>
 
 ## はじめかた
 
-### ビルド
+実行に必要なのは **バイナリ 1 つと設定ファイル 1 つ** です。Docker は必須ではありません。
+
+### ビルド済みバイナリを使う
+
+[Releases](https://github.com/kienn-HCl/fuguruma/releases) から OS / CPU に合ったアーカイブ（linux / macOS / windows、amd64 / arm64）をダウンロードして展開します。Web UI はバイナリに同梱されています。
 
 ```bash
-make build                          # web をビルドし、bin/fuguruma を生成（Node.js はビルド時のみ必要）
-make build GOOS=linux GOARCH=arm64  # 別アーキテクチャ向けのクロスコンパイル
+tar xzf fuguruma_<version>_linux_amd64.tar.gz
+./fuguruma version
 ```
 
-実行に必要なのは **バイナリ 1 つと設定ファイル 1 つ** です。Docker は必須ではありません。
+### ソースからビルドする
+
+Go 1.26 以上と Node.js 22 以上が必要です（Node.js はビルド時のみ）。
+
+```bash
+make build                          # web をビルドし、bin/fuguruma を生成
+make build GOOS=linux GOARCH=arm64  # 別アーキテクチャ向けのクロスコンパイル
+```
 
 ### とりあえず試す
 
 ```bash
-./bin/fuguruma -config ./config.toml          # 初回は config.toml が作られる
+./fuguruma -config ./config.toml          # 初回は config.toml が作られる
 # config.toml の server.books_dir を本のディレクトリに書き換えて再起動
-./bin/fuguruma -config ./config.toml passwd   # ログインパスワードを設定（任意）
+./fuguruma -config ./config.toml passwd   # ログインパスワードを設定（任意）
 ```
 
-http://localhost:8080 を開き、⚙（設定）から AI プロバイダを設定します。
+http://localhost:8080 を開き、⚙（設定）から AI プロバイダを設定します。（ソースからビルドした場合、バイナリは `bin/fuguruma` です）
 
 ## systemd で動かす（推奨）
 
@@ -83,7 +100,7 @@ http://localhost:8080 を開き、⚙（設定）から AI プロバイダを設
 ```bash
 # 1. 専用ユーザーとバイナリ
 sudo useradd --system --home-dir /var/lib/fuguruma --shell /usr/sbin/nologin fuguruma
-sudo install -m 755 bin/fuguruma /usr/local/bin/fuguruma
+sudo install -m 755 fuguruma /usr/local/bin/fuguruma   # ソースからビルドした場合は bin/fuguruma
 
 # 2. 設定ファイル（Web から編集できるよう、ディレクトリごとサービスユーザーの所有にする）
 sudo install -d -o fuguruma -g fuguruma -m 750 /etc/fuguruma
@@ -114,25 +131,10 @@ sudo systemctl restart fuguruma    # [server] の設定を変えたら再起動
 - 本のディレクトリがネットワークマウント（NFS/SMB）の場合は、ユニットの `RequiresMountsFor=` のコメントを外してパスを書くと、マウント完了後に起動します。
 - API キーなどを設定ファイルに書きたくない場合は `/etc/fuguruma/env`（`ANTHROPIC_API_KEY=...` 形式、`chmod 600`）に書けば読み込まれます。
 
-### AI に Claude Code（`claude -p`）を使う場合
-
-サーバーにインストールした Claude Code をサービスユーザーとして認証しておきます。
-
-```bash
-# サブスクリプションの場合: 長期トークンを発行して env に書く
-claude setup-token                                  # 自分のアカウントで実行し、表示されたトークンを控える
-echo 'CLAUDE_CODE_OAUTH_TOKEN=...' | sudo tee -a /etc/fuguruma/env
-# または API キー: echo 'ANTHROPIC_API_KEY=sk-ant-...' | sudo tee -a /etc/fuguruma/env
-sudo chmod 600 /etc/fuguruma/env && sudo chown fuguruma: /etc/fuguruma/env
-sudo systemctl restart fuguruma
-```
-
-`claude` が `/usr/local/bin` など PATH 上に無い場合は、設定ファイルの `ai.claude_cli.command` にフルパスを書いてください。Fuguruma は `claude -p` を**ツール無効**（`--tools ""`）・空の作業ディレクトリで実行するため、本文に含まれる指示によってサーバー上でコマンドが実行されることはありません。
-
 ### ユーザー単位で動かす場合（自分の PC など）
 
 ```bash
-install -D -m 755 bin/fuguruma ~/.local/bin/fuguruma
+install -D -m 755 fuguruma ~/.local/bin/fuguruma
 install -D -m 644 deploy/fuguruma.user.service ~/.config/systemd/user/fuguruma.service
 ~/.local/bin/fuguruma -config ~/.config/fuguruma/config.toml passwd   # 設定ファイル作成 + パスワード
 $EDITOR ~/.config/fuguruma/config.toml                               # books_dir / data_dir を絶対パスで設定
@@ -151,7 +153,7 @@ mkdir -p config data && sudo chown 1000:1000 config data
 docker compose up -d --build
 ```
 
-コンテナ内のパスは環境変数で固定され、設定は `./config/config.toml` に保存されます。最小イメージには `claude` CLI が含まれないため、`claude-cli` プロバイダを使う場合はバイナリ + systemd 構成にしてください。
+コンテナ内のパスは環境変数で固定され、設定は `./config/config.toml` に保存されます。
 
 ## 外部からアクセスする場合
 
@@ -177,7 +179,7 @@ books.example.com {
 
 - 設定ファイルが無ければ起動時に既定値で作成されます。例: [deploy/config.example.toml](deploy/config.example.toml)
 - `[library]` `[auth]` `[ai]` は Web の **設定画面（⚙）** から変更でき、即時反映されます（保存時にファイルが書き換わり、コメントは消えます）。
-- `[server]`（待受アドレス・本のディレクトリ・データディレクトリ）と `ai.claude_cli.command` は、セキュリティのため**設定ファイルでのみ**変更できます。変更後は再起動してください。
+- `[server]`（待受アドレス・本のディレクトリ・データディレクトリ）は、セキュリティのため**設定ファイルでのみ**変更できます。変更後は再起動してください。
 - API キーを含むため、設定ファイルはパーミッション `0600` で保存されます。
 - 環境変数 `FUGURUMA_ADDR` / `FUGURUMA_DATA_DIR` / `FUGURUMA_BOOKS_DIR` / `FUGURUMA_PASSWORD` / `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` は設定ファイルの値を上書きします（ファイルには書き戻されません。主にコンテナ向け）。
 - バックアップは `data_dir` と設定ファイルをコピーすれば十分です。
@@ -188,7 +190,6 @@ books.example.com {
 |---|---|
 | `anthropic` | Claude API（公式 Go SDK）。安全分類器で拒否された場合に推奨モデルへ自動で再試行するサーバー側フォールバック（`fallbacks: "default"`）を有効にしています |
 | `openai` | OpenAI 互換の Chat Completions API。`base_url` を変えれば OpenAI / Gemini / OpenRouter / Ollama / LM Studio / vLLM などに接続できます |
-| `claude-cli` | サーバー上の Claude Code を `claude -p` で実行。CLI 側の認証（サブスクリプション等）をそのまま使います |
 | `none` | AI 機能を無効化 |
 
 設定画面の「接続テスト」で、保存前に疎通を確認できます。
@@ -209,20 +210,27 @@ books.example.com {
 ```bash
 make dev-api   # API サーバー（config.toml を使用、:8080）
 make dev-web   # Vite 開発サーバー（:5173、/api は :8080 へプロキシ）
-go test ./...
+make test      # go test
+make lint      # gofmt / go vet / TypeScript の型チェック
+make notices   # 依存ライブラリを変えたら THIRD_PARTY_NOTICES.md を再生成
 ```
 
+- **CI**（`.github/workflows/ci.yml`）：プッシュとプルリクエストごとに、Web UI のビルド、gofmt、go vet、go test、起動確認、THIRD_PARTY_NOTICES.md が最新か、govulncheck を実行します。
+- **リリース**（`.github/workflows/release.yml`）：`v0.1.0` のようなタグを push すると、GoReleaser が各 OS 向けのバイナリをビルドして GitHub Releases に公開します。
+- **依存関係の更新**：Dependabot（`.github/dependabot.yml`）が Go・npm・GitHub Actions の更新を毎週提案します。
+
 ```
-cmd/fuguruma      エントリポイント（serve / passwd）
+cmd/fuguruma      エントリポイント（serve / passwd / version）
 internal/config   設定ファイルの読み込み・検証・保存、環境変数による上書き
 internal/db       SQLite スキーマ（マイグレーション）とクエリ
 internal/library  ディレクトリスキャン、EPUB メタデータ・表紙抽出、移動検知
 internal/auth     パスワード（bcrypt）+ 署名付き Cookie
-internal/ai       プロバイダ（anthropic / openai / claude-cli）、プロンプト
+internal/ai       AI プロバイダ（Claude API / OpenAI 互換）、プロンプト
 internal/api      REST / SSE ハンドラ、設定 API、SPA 配信
 web/src/pages     本棚・リーダー・ノート・設定・ログイン
 web/src/reader    EpubView / PdfView（共通インターフェース ReaderHandle）
 deploy/           systemd ユニット、設定ファイル例
+scripts/          THIRD_PARTY_NOTICES.md の生成スクリプト
 docs/             仕様書（SPEC.md）、スクリーンショット、ロゴ
 ```
 
@@ -233,3 +241,9 @@ DB スキーマを変更するときは `internal/db/db.go` の `migrations` に
 - 表示設定（テーマ・文字サイズ・本文フォント）は端末ごと
 - オフライン読書（PWA）、CBZ、縦書き最適化、本全体を対象にした AI 質問は未対応（SPEC.md §10）
 - PDF は 1 ページ表示。ハイライトは選択範囲の矩形で保存するため、ズーム倍率が変わっても位置は保たれます
+
+## ライセンス
+
+[MIT License](LICENSE)。バイナリに同梱している依存ライブラリ（epub.js、pdf.js、React など）のライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) にまとめています。
+
+脆弱性を見つけた場合は [SECURITY.md](SECURITY.md) を参照してください。

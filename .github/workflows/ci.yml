@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - uses: actions/setup-go@v5
+        with:
+          # Latest patch release of the Go version in go.mod (security fixes to the standard library).
+          go-version: "1.26.x"
+          check-latest: true
+
+      - name: Build web UI (includes type check)
+        working-directory: web
+        run: |
+          npm ci
+          npm run build
+
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test -race ./...
+
+      - name: Build binary
+        run: CGO_ENABLED=0 go build -trimpath -o bin/fuguruma ./cmd/fuguruma
+
+      - name: Smoke test
+        run: |
+          ./bin/fuguruma version
+          mkdir -p /tmp/fg/books
+          FUGURUMA_BOOKS_DIR=/tmp/fg/books FUGURUMA_DATA_DIR=/tmp/fg/data FUGURUMA_ADDR=127.0.0.1:8080 \
+            ./bin/fuguruma -config /tmp/fg/config.toml &
+          pid=$!
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/api/status && break; sleep 0.5; done
+          curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
+          kill $pid
+
+      - name: THIRD_PARTY_NOTICES.md is up to date
+        run: |
+          node scripts/gen-notices.mjs
+          git diff --exit-code THIRD_PARTY_NOTICES.md || (echo "::error::Run 'make notices' and commit THIRD_PARTY_NOTICES.md" && exit 1)
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...

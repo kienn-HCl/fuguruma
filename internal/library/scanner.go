@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/you/fuguruma/internal/db"
+	"github.com/kienn-HCl/fuguruma/internal/db"
 )
 
 type Library struct {
