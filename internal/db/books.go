@@ -177,6 +177,20 @@ func (s *Store) AllBookFiles() ([]*Book, error) {
 	return out, rows.Err()
 }
 
+// FindByFingerprint returns a book with the given content fingerprint,
+// preferring one whose file is present, or ErrNotFound.
+func (s *Store) FindByFingerprint(fp string) (*Book, error) {
+	var id string
+	err := s.DB.QueryRow(`SELECT id FROM books WHERE fingerprint = ? ORDER BY missing LIMIT 1`, fp).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.GetBook(id)
+}
+
 func (s *Store) InsertBook(b *Book) error {
 	_, err := s.DB.Exec(`INSERT INTO books (id, path, format, title, author, description, fingerprint, size, mtime, has_cover, missing, added_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
@@ -189,6 +203,20 @@ func (s *Store) UpdateBookFile(id, path, fingerprint string, size, mtime int64) 
 	_, err := s.DB.Exec(`UPDATE books SET path = ?, fingerprint = ?, size = ?, mtime = ?, missing = 0, updated_at = ? WHERE id = ?`,
 		path, fingerprint, size, mtime, Now(), id)
 	return err
+}
+
+// DeleteBook removes a book record. Its highlights, AI conversations, reading
+// progress and tag assignments are deleted with it (ON DELETE CASCADE); notes
+// are kept and only detached from the book (ON DELETE SET NULL).
+func (s *Store) DeleteBook(id string) error {
+	res, err := s.DB.Exec(`DELETE FROM books WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (s *Store) SetMissing(id string, missing bool) error {

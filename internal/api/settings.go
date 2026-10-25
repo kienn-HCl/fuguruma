@@ -42,8 +42,13 @@ func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {
 		"configPath":   s.Conf.Path(),
 		"envOverrides": s.Conf.EnvOverridden(),
 		"server":       map[string]string{"addr": c.Server.Addr, "dataDir": c.Server.DataDir, "booksDir": c.Server.BooksDir},
-		"library":      map[string]string{"scanInterval": durationText(c.Library.ScanInterval)},
-		"auth":         map[string]bool{"passwordSet": s.Auth.Enabled()},
+		"library": map[string]any{
+			"scanInterval":  durationText(c.Library.ScanInterval),
+			"uploadEnabled": c.Library.UploadEnabled,
+			"uploadDir":     c.Library.UploadDir,
+			"uploadMaxMb":   c.Library.UploadMaxMB,
+		},
+		"auth": map[string]bool{"passwordSet": s.Auth.Enabled()},
 		"ai": map[string]any{
 			"provider":  c.AI.Provider,
 			"error":     errStr,
@@ -114,7 +119,10 @@ func (p *aiPatch) apply(c *config.AI) {
 func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Library *struct {
-			ScanInterval *string `json:"scanInterval"`
+			ScanInterval  *string `json:"scanInterval"`
+			UploadEnabled *bool   `json:"uploadEnabled"`
+			UploadDir     *string `json:"uploadDir"`
+			UploadMaxMB   *int    `json:"uploadMaxMb"`
 		} `json:"library"`
 		AI *aiPatch `json:"ai"`
 	}
@@ -123,8 +131,17 @@ func (s *Server) putSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	var parseErr error
 	err := s.Conf.Update(func(c *config.Config) {
-		if body.Library != nil && body.Library.ScanInterval != nil {
-			parseErr = c.Library.ScanInterval.UnmarshalText([]byte(strings.TrimSpace(*body.Library.ScanInterval)))
+		if lib := body.Library; lib != nil {
+			if lib.ScanInterval != nil {
+				parseErr = c.Library.ScanInterval.UnmarshalText([]byte(strings.TrimSpace(*lib.ScanInterval)))
+			}
+			if lib.UploadEnabled != nil {
+				c.Library.UploadEnabled = *lib.UploadEnabled
+			}
+			set(&c.Library.UploadDir, lib.UploadDir)
+			if lib.UploadMaxMB != nil {
+				c.Library.UploadMaxMB = *lib.UploadMaxMB
+			}
 		}
 		body.AI.apply(&c.AI)
 	})

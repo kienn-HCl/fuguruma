@@ -9,7 +9,7 @@ import SettingsPage from "./pages/Settings";
 import { ToastHost } from "./components/Toast";
 
 type StatusCtxValue = Status & { refresh: () => Promise<void> };
-const StatusCtx = createContext<StatusCtxValue>({ authRequired: false, loggedIn: true, aiEnabled: false, aiProvider: "none", refresh: async () => {} });
+const StatusCtx = createContext<StatusCtxValue>({ authRequired: false, loggedIn: true, aiEnabled: false, aiProvider: "none", uploadEnabled: false, uploadMaxMb: 0, refresh: async () => {} });
 export const useStatus = () => useContext(StatusCtx);
 
 export default function App() {

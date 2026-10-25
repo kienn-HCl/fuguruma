@@ -12,6 +12,12 @@
 [library]
   # "30m", "2h", or "0" to disable automatic rescans.
   scan_interval = "30m"
+  # Upload books (.epub / .pdf) from the web UI. Files are always created as
+  # new files under books_dir/upload_dir; existing files are never touched.
+  # The service user needs write access to that directory.
+  upload_enabled = true
+  upload_dir = "Uploads"
+  upload_max_mb = 512
 
 [auth]
   # Set with `fuguruma -config FILE passwd` or from the web UI.

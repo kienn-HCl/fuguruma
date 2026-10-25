@@ -34,6 +34,7 @@ export default function SettingsPage() {
   const [oaKey, setOaKey] = useState<KeyState>(emptyKey);
   const [cliModel, setCliModel] = useState("");
   const [scan, setScan] = useState("");
+  const [upload, setUpload] = useState({ uploadEnabled: true, uploadDir: "", uploadMaxMb: 512 });
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -44,6 +45,7 @@ export default function SettingsPage() {
     setOa({ baseUrl: x.ai.openai.baseUrl, model: x.ai.openai.model });
     setCliModel(x.ai.claudeCli.model);
     setScan(x.library.scanInterval);
+    setUpload({ uploadEnabled: x.library.uploadEnabled, uploadDir: x.library.uploadDir, uploadMaxMb: x.library.uploadMaxMb });
     setAnthKey(emptyKey);
     setOaKey(emptyKey);
   };
@@ -64,7 +66,7 @@ export default function SettingsPage() {
   const save = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      load(await api.saveSettings({ library: { scanInterval: scan }, ai: aiPatch() }));
+      load(await api.saveSettings({ library: { scanInterval: scan, ...upload }, ai: aiPatch() }));
       await status.refresh();
       toast("設定を保存しました");
     } catch (err) {
@@ -165,6 +167,22 @@ export default function SettingsPage() {
             <Field label="自動スキャン間隔" hint="例: 30m, 2h。0 で自動スキャンしない（本棚の ⟳ で手動実行）">
               <input className="input" value={scan} onChange={(e) => setScan(e.target.value)} style={{ maxWidth: 160 }} />
             </Field>
+            <Field label="Web からのアップロード">
+              <label className="row" style={{ fontSize: 14, color: "var(--text)" }}>
+                <input type="checkbox" checked={upload.uploadEnabled} onChange={(e) => setUpload({ ...upload, uploadEnabled: e.target.checked })} />
+                本棚から本（.epub / .pdf）をアップロードできるようにする
+              </label>
+            </Field>
+            {upload.uploadEnabled && (
+              <>
+                <Field label="保存先フォルダ" hint={`本のディレクトリ（${s.server.booksDir}）の中のフォルダ。空欄なら直下。既存のファイルが上書きされることはありません。`}>
+                  <input className="input" value={upload.uploadDir} onChange={(e) => setUpload({ ...upload, uploadDir: e.target.value })} placeholder="Uploads" style={{ maxWidth: 260 }} />
+                </Field>
+                <Field label="1 ファイルの上限（MB）">
+                  <input className="input" type="number" min={1} value={upload.uploadMaxMb} onChange={(e) => setUpload({ ...upload, uploadMaxMb: Number(e.target.value) })} style={{ maxWidth: 120 }} />
+                </Field>
+              </>
+            )}
           </section>
 
           <div className="row" style={{ justifyContent: "flex-end", marginBottom: 24 }}>

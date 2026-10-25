@@ -5,6 +5,7 @@ import { useStatus } from "../App";
 import BookCover from "../components/BookCover";
 import BookEditModal from "../components/BookEditModal";
 import TagManager from "../components/TagManager";
+import UploadModal from "../components/UploadModal";
 import { toast } from "../components/Toast";
 import { renderPdfCover } from "../reader/pdfjs";
 
@@ -14,12 +15,16 @@ export default function Library() {
   const [params, setParams] = useSearchParams();
   const tag = Number(params.get("tag") || 0);
   const sort = params.get("sort") || "recent";
+  // Books whose file has gone missing are hidden unless this filter is on.
+  const showMissing = params.get("missing") === "1";
   const [q, setQ] = useState(params.get("q") || "");
   const [books, setBooks] = useState<Book[] | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
   const [editing, setEditing] = useState<Book | null>(null);
   const [managingTags, setManagingTags] = useState(false);
   const [scanning, setScanning] = useState(false);
+  const [uploading, setUploading] = useState<File[] | null>(null); // open upload dialog with these files
+  const dragging = usePageFileDrop(status.uploadEnabled && !uploading, (files) => setUploading(files));
 
   const setParam = (k: string, v: string) => {
     const p = new URLSearchParams(params);
@@ -44,6 +49,9 @@ export default function Library() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
+
+  const missingCount = books?.filter((b) => b.missing).length ?? 0;
+  const shown = books && books.filter((b) => b.missing === showMissing);
 
   usePdfCovers(books, (id) => setBooks((bs) => bs && bs.map((b) => (b.id === id ? { ...b, hasCover: true, updatedAt: Date.now() } : b))));
 
@@ -88,17 +96,36 @@ export default function Library() {
             <span className="muted">{t.count}</span>
           </button>
         ))}
+        {(missingCount > 0 || showMissing) && (
+          <button className={`chip ${showMissing ? "active" : ""}`} onClick={() => setParam("missing", showMissing ? "" : "1")} title="ファイルが見つからない本">
+            見つからない本
+            <span className="muted">{missingCount}</span>
+          </button>
+        )}
         <button className="chip" onClick={() => setManagingTags(true)}>＋ タグ管理</button>
       </nav>
 
-      {books === null ? null : books.length === 0 ? (
+      {showMissing && (
+        <p className="notice">
+          ファイルが見つからない本です。メモやハイライトは残っています。ファイルを本のディレクトリに戻す（場所や名前は変わっていても構いません）か、同じファイルをアップロードし直すと元に戻ります。不要な本は「⋯」から本棚から削除できます。
+        </p>
+      )}
+
+      {shown === null ? null : shown.length === 0 && showMissing ? (
+        <div className="empty">ファイルが見つからない本はありません。</div>
+      ) : shown.length === 0 ? (
         <div className="empty">
           本が見つかりません。<br />
-          <span className="small">BOOKS_DIR に .epub / .pdf を置いて「⟳」で再スキャンしてください。</span>
+          <span className="small">本のディレクトリに .epub / .pdf を置いて「⟳」で再スキャンしてください。</span>
+          {status.uploadEnabled && (
+            <div style={{ marginTop: 16 }}>
+              <button className="btn primary" onClick={() => setUploading([])}>＋ 本をアップロード</button>
+            </div>
+          )}
         </div>
       ) : (
         <main className="grid">
-          {books.map((b) => (
+          {shown.map((b) => (
             <div key={b.id} className={`book ${b.missing ? "missing" : ""}`} onClick={() => !b.missing && nav(`/read/${b.id}`)} title={b.missing ? "ファイルが見つかりません" : b.title}>
               <BookCover book={b} />
               <button className="more" aria-label="編集" onClick={(e) => { e.stopPropagation(); setEditing(b); }}>⋯</button>
@@ -121,9 +148,31 @@ export default function Library() {
           onClose={() => setEditing(null)}
           onSaved={() => { load(); loadTags(); }}
           onTagsChanged={loadTags}
+          onDeleted={() => {
+            load();
+            loadTags();
+            if (missingCount <= 1) setParam("missing", "");
+          }}
         />
       )}
       {managingTags && <TagManager tags={tags} onClose={() => setManagingTags(false)} onChanged={() => { loadTags(); load(); }} />}
+
+      {status.uploadEnabled && (
+        <button className="fab" onClick={() => setUploading([])} aria-label="本を追加" title="本を追加（ファイルをドロップしても追加できます）">
+          ＋<span className="fab-label">本を追加</span>
+        </button>
+      )}
+      {dragging && <div className="drop-overlay">ドロップして本を追加</div>}
+      {uploading && (
+        <UploadModal
+          tags={tags}
+          maxMb={status.uploadMaxMb}
+          initialFiles={uploading}
+          onClose={() => setUploading(null)}
+          onUploaded={() => { load(); loadTags(); }}
+          onOpenBook={(id) => nav(`/read/${id}`)}
+        />
+      )}
     </>
   );
 }
@@ -150,4 +199,46 @@ function usePdfCovers(books: Book[] | null, onDone: (id: string) => void) {
         setTick((t) => t + 1);
       });
   }, [books, tick]);
+}
+
+/** Lets the user drop files anywhere on the page; returns whether files are being dragged over it. */
+function usePageFileDrop(enabled: boolean, onDrop: (files: File[]) => void) {
+  const [dragging, setDragging] = useState(false);
+  const cb = useRef(onDrop);
+  cb.current = onDrop;
+  useEffect(() => {
+    if (!enabled) return;
+    let depth = 0; // dragenter/dragleave fire for every child element
+    const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes("Files") ?? false;
+    const enter = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth++;
+      setDragging(true);
+    };
+    const leave = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      depth = Math.max(0, depth - 1);
+      if (depth === 0) setDragging(false);
+    };
+    const over = (e: DragEvent) => hasFiles(e) && e.preventDefault();
+    const drop = (e: DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      depth = 0;
+      setDragging(false);
+      cb.current([...(e.dataTransfer?.files ?? [])]);
+    };
+    window.addEventListener("dragenter", enter);
+    window.addEventListener("dragleave", leave);
+    window.addEventListener("dragover", over);
+    window.addEventListener("drop", drop);
+    return () => {
+      window.removeEventListener("dragenter", enter);
+      window.removeEventListener("dragleave", leave);
+      window.removeEventListener("dragover", over);
+      window.removeEventListener("drop", drop);
+      setDragging(false);
+    };
+  }, [enabled]);
+  return dragging;
 }

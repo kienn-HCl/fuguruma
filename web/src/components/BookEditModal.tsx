@@ -4,13 +4,14 @@ import Modal from "./Modal";
 import { toast } from "./Toast";
 
 export default function BookEditModal({
-  book, tags, onClose, onSaved, onTagsChanged,
+  book, tags, onClose, onSaved, onTagsChanged, onDeleted,
 }: {
   book: Book;
   tags: Tag[];
   onClose: () => void;
   onSaved: (b: Book) => void;
   onTagsChanged: () => void;
+  onDeleted: () => void;
 }) {
   const [title, setTitle] = useState(book.title);
   const [author, setAuthor] = useState(book.author);
@@ -44,6 +45,23 @@ export default function BookEditModal({
     const b = await api.setBookTags(book.id, [...sel]);
     onSaved(b);
     onClose();
+  };
+
+  const remove = async () => {
+    const ok = confirm(
+      `「${book.title}」を本棚から削除しますか？\n\n` +
+        "ハイライト・AI との会話・読書位置・タグ付けは削除されます。\nノートは削除されず、本に紐づかないノートとして残ります。\n\n" +
+        "あとで同じファイルを置いても、新しい本として登録されます。",
+    );
+    if (!ok) return;
+    try {
+      await api.deleteBook(book.id);
+      toast(`「${book.title}」を本棚から削除しました`);
+      onDeleted();
+      onClose();
+    } catch (e) {
+      toast((e as Error).message);
+    }
   };
 
   return (
@@ -82,6 +100,14 @@ export default function BookEditModal({
         <button className="btn ghost" onClick={onClose}>キャンセル</button>
         <button className="btn primary" onClick={save}>保存</button>
       </div>
+      {book.missing && (
+        <div className="danger-zone">
+          <p className="small muted" style={{ marginTop: 0 }}>
+            この本のファイルは見つかりません。ファイルを本のディレクトリに戻すと元に戻ります。不要なら本棚から削除できます（ファイルの削除は行いません）。
+          </p>
+          <button className="btn danger" onClick={remove}>本棚から削除</button>
+        </div>
+      )}
     </Modal>
   );
 }

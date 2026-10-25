@@ -33,6 +33,11 @@ type Server struct {
 
 type Library struct {
 	ScanInterval Duration `toml:"scan_interval"`
+	// Uploads from the web UI are written as new files under UploadDir
+	// (relative to server.books_dir). Existing files are never modified.
+	UploadEnabled bool   `toml:"upload_enabled"`
+	UploadDir     string `toml:"upload_dir"`
+	UploadMaxMB   int    `toml:"upload_max_mb"`
 }
 
 type Auth struct {
@@ -102,7 +107,7 @@ func (d Duration) MarshalText() ([]byte, error) {
 func Default() Config {
 	return Config{
 		Server:  Server{Addr: ":8080", DataDir: "./data", BooksDir: "./books"},
-		Library: Library{ScanInterval: Duration{30 * time.Minute}},
+		Library: Library{ScanInterval: Duration{30 * time.Minute}, UploadEnabled: true, UploadDir: "Uploads", UploadMaxMB: 512},
 		AI: AI{
 			Provider:  "none",
 			Anthropic: Anthropic{Model: "claude-opus-5-5", Effort: "medium"},
@@ -132,6 +137,12 @@ func (c *Config) Validate() error {
 	}
 	if c.Library.ScanInterval.Duration < 0 {
 		return errors.New("library.scan_interval must not be negative")
+	}
+	if d := c.Library.UploadDir; filepath.IsAbs(d) || d == ".." || strings.HasPrefix(filepath.ToSlash(filepath.Clean(d)), "../") {
+		return errors.New("library.upload_dir must be a path inside server.books_dir")
+	}
+	if c.Library.UploadMaxMB <= 0 {
+		return errors.New("library.upload_max_mb must be positive")
 	}
 	return nil
 }
