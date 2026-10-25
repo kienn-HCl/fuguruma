@@ -20,7 +20,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # Latest patch release of the Go version in go.mod (security fixes to the standard library).
           go-version: "1.26.x"
