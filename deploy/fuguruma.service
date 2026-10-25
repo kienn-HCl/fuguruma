@@ -1,0 +1,41 @@
+# systemd unit for Fuguruma. Install steps: see README.md "systemd で動かす".
+[Unit]
+Description=Fuguruma - self-hosted ebook reader
+Documentation=https://github.com/kienn-HCl/fuguruma
+After=network-online.target
+Wants=network-online.target
+# If the books live on a network mount, wait for it:
+# RequiresMountsFor=/srv/books
+
+[Service]
+Type=simple
+User=fuguruma
+Group=fuguruma
+ExecStart=/usr/local/bin/fuguruma -config /etc/fuguruma/config.toml
+Restart=on-failure
+RestartSec=5
+
+# Optional secrets / overrides (ANTHROPIC_API_KEY=..., FUGURUMA_PASSWORD=..., ...)
+EnvironmentFile=-/etc/fuguruma/env
+
+# Creates /var/lib/fuguruma owned by the service user (set server.data_dir to it).
+StateDirectory=fuguruma
+StateDirectoryMode=0750
+WorkingDirectory=/var/lib/fuguruma
+
+# Hardening. The whole filesystem is read-only except the data dir and the
+# config dir (written when settings are saved from the web UI).
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/etc/fuguruma
+ProtectHome=read-only
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+[Install]
+WantedBy=multi-user.target

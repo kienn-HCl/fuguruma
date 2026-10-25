@@ -1,0 +1,10 @@
+# Local runtime files (anchored to the repository root so they never match
+# source directories such as internal/config).
+/bin/
+/data/
+/books/
+/config/
+/config.toml
+*.db
+.env
+/dist/
