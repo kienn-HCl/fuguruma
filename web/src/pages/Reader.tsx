@@ -14,6 +14,14 @@ import { highlightColors, Mark, ReaderHandle, ReaderSettings, Selection, TocItem
 
 type PanelTab = "toc" | "note" | "ai" | "settings";
 
+/** Panel tabs, in the same order and with the same icons in the panel and the bottom toolbar. */
+const panelTabs: { id: PanelTab; icon: string; label: string }[] = [
+  { id: "toc", icon: "☰", label: "目次" },
+  { id: "note", icon: "✎", label: "ノート" },
+  { id: "ai", icon: "✦", label: "AI" },
+  { id: "settings", icon: "Aa", label: "表示" },
+];
+
 const defaultSettings: ReaderSettings = { theme: "light", fontSize: 100, font: "book", margin: true };
 function loadSettings(): ReaderSettings {
   try {
@@ -297,9 +305,10 @@ export default function Reader() {
         {panel && (
           <aside className="panel">
             <div className="panel-tabs">
-              {(["toc", "note", "ai", "settings"] as PanelTab[]).map((t) => (
-                <button key={t} className={panel === t ? "active" : ""} onClick={() => setPanel(t)}>
-                  {{ toc: "目次", note: "ノート", ai: "AI", settings: "表示" }[t]}
+              {panelTabs.map((t) => (
+                <button key={t.id} className={panel === t.id ? "active" : ""} onClick={() => setPanel(t.id)}>
+                  <span className="tab-icon" aria-hidden>{t.icon}</span>
+                  {t.label}
                 </button>
               ))}
               <div className="spacer" />
@@ -393,14 +402,9 @@ export default function Reader() {
               <button className="icon-btn" onClick={() => setZoom((z) => Math.min(4, z + 0.25))} aria-label="拡大">＋</button>
             </div>
           )}
-          {([
-            ["toc", "☰", "目次"],
-            ["settings", "Aa", "表示設定"],
-            ["note", "✎", "ノート"],
-            ["ai", "✦", "AI"],
-          ] as [PanelTab, string, string][]).map(([t, icon, label]) => (
-            <button key={t} className={`icon-btn ${panel === t ? "active" : ""}`} onClick={() => togglePanel(t)} title={label} aria-label={label}>
-              {icon}
+          {panelTabs.map((t) => (
+            <button key={t.id} className={`icon-btn ${panel === t.id ? "active" : ""}`} onClick={() => togglePanel(t.id)} title={t.label} aria-label={t.label}>
+              {t.icon}
             </button>
           ))}
         </div>
