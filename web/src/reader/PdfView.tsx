@@ -79,7 +79,7 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
     let loaded: PDFDocumentProxy | null = null;
     openPdf(props.url)
       .then(async (d) => {
-        if (cancelled) return d.destroy();
+        if (cancelled) return d.loadingTask.destroy();
         loaded = d;
         setDoc(d);
         p.current.onReady(await resolveOutline(d).catch(() => []));
@@ -87,7 +87,7 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
       .catch((e) => setError(String(e)));
     return () => {
       cancelled = true;
-      loaded?.destroy();
+      loaded?.loadingTask.destroy();
     };
   }, [props.url]);
 
@@ -120,7 +120,7 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
       pe.style.height = `${Math.floor(viewport.height)}px`;
       pe.style.setProperty("--scale-factor", String(viewport.scale));
       const rt = pg.render({
-        canvasContext: canvas.getContext("2d")!,
+        canvas,
         viewport,
         transform: dpr !== 1 ? [dpr, 0, 0, dpr, 0, 0] : undefined,
       });
