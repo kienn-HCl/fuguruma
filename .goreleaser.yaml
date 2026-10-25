@@ -21,6 +21,8 @@ archives:
       - goos: windows
         formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    # Extract into a directory of the same name instead of the current one.
+    wrap_in_directory: true
     files:
       - LICENSE
       - THIRD_PARTY_NOTICES.md
