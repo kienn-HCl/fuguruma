@@ -30,13 +30,18 @@ export default function MemoMargin({
   const [heights, setHeights] = useState<Record<string, number>>({});
   const [box, setBox] = useState<DOMRect | null>(null);
   const cards = useRef(new Map<string, HTMLDivElement>());
+  const editingNow = useRef(editing);
+  editingNow.current = editing;
 
   const measure = useCallback(() => {
     const parent = root.current?.parentElement;
     if (!parent) return;
     setBox(parent.getBoundingClientRect());
-    setAnchors(getAnchors());
-  }, [getAnchors]);
+    const next = getAnchors();
+    // While the text is re-laid out (e.g. the margin just appeared) a passage can be
+    // briefly unfindable; keep the card being edited where it was instead of removing it.
+    setAnchors((prev) => (editingNow.current && active && !next[active] && prev[active] ? { ...next, [active]: prev[active] } : next));
+  }, [getAnchors, active]);
 
   // The views draw asynchronously, so measure again shortly after a change.
   useEffect(() => {

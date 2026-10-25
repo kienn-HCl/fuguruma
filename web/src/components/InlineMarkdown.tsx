@@ -41,6 +41,17 @@ export default function InlineMarkdown({
     onSave(v);
   };
 
+  // Save what was typed if the editor goes away before the pause (e.g. its card is re-laid out).
+  const latest = useRef({ text, onSave });
+  latest.current = { text, onSave };
+  useEffect(
+    () => () => {
+      const { text: t, onSave: save } = latest.current;
+      if (t !== saved.current) save(t);
+    },
+    [],
+  );
+
   useEffect(() => {
     if (!isEditing) return;
     const t = setTimeout(() => flush(), 800);

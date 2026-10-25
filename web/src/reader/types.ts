@@ -67,9 +67,13 @@ export interface ReaderViewProps {
   onLayout?(): void;
   /** Tap in the middle of the page. */
   onCenterTap(): void;
-  /** PDF only: zoom factor relative to fitting the page (1 = fit). */
-  zoom?: number;
+  /** PDF only: fit the whole page, fit the width, or a factor of the whole-page size. */
+  zoom?: PdfZoom;
+  /** PDF only: the zoom in effect, as a factor of the whole-page size (e.g. 1.12 when fitting the width). */
+  onZoomChange?(factor: number): void;
 }
+
+export type PdfZoom = "page" | "width" | number;
 
 export const highlightColors: Record<string, string> = {
   yellow: "#ffe066",

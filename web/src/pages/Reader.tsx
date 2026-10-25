@@ -10,7 +10,7 @@ import { hasContent } from "../memos";
 import EpubView from "../reader/EpubView";
 import MemoMargin from "../reader/MemoMargin";
 import PdfView from "../reader/PdfView";
-import { highlightColors, Mark, ReaderHandle, ReaderSettings, Selection, TocItem } from "../reader/types";
+import { highlightColors, Mark, PdfZoom, ReaderHandle, ReaderSettings, Selection, TocItem } from "../reader/types";
 
 type PanelTab = "toc" | "note" | "ai" | "settings";
 
@@ -28,6 +28,15 @@ function loadSettings(): ReaderSettings {
     return { ...defaultSettings, ...JSON.parse(localStorage.getItem("fuguruma:reader") || "{}") };
   } catch {
     return defaultSettings;
+  }
+}
+
+function loadZoom(): PdfZoom {
+  try {
+    const v = JSON.parse(localStorage.getItem("fuguruma:pdf-zoom") || '"page"');
+    return v === "width" || typeof v === "number" ? v : "page";
+  } catch {
+    return "page";
   }
 }
 
@@ -55,7 +64,8 @@ export default function Reader() {
   const [openConv, setOpenConv] = useState<string | null>(null);
   const [active, setActive] = useState<string | null>(null); // memo shown in the margin or the sheet
   const [editing, setEditing] = useState(false);
-  const [zoom, setZoom] = useState(1); // PDF only
+  const [zoom, setZoom] = useState<PdfZoom>(loadZoom); // PDF only, remembered per device
+  const [zoomFactor, setZoomFactor] = useState(1); // the zoom in effect, relative to the whole page
   const [viewerWidth, setViewerWidth] = useState(0);
   const [layoutTick, setLayoutTick] = useState(0);
   const lastSaved = useRef(0);
@@ -94,6 +104,12 @@ export default function Reader() {
       localStorage.setItem("fuguruma:reader", JSON.stringify(settings));
     } catch { /* ignore */ }
   }, [settings]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("fuguruma:pdf-zoom", JSON.stringify(zoom));
+    } catch { /* ignore */ }
+  }, [zoom]);
 
   // Save reading position (debounced). keepalive lets it finish if the tab closes.
   useEffect(() => {
@@ -281,6 +297,7 @@ export default function Reader() {
             onCenterTap={onCenterTap}
             onLayout={onLayout}
             zoom={zoom}
+            onZoomChange={setZoomFactor}
           />
           {marginOn && (
             <MemoMargin
@@ -396,11 +413,7 @@ export default function Reader() {
           <button className="icon-btn" onClick={() => nav("/")} aria-label="本棚へ" title="本棚へ">‹</button>
           <div className="title" title={book.title}>{book.title}</div>
           {book.format === "pdf" && (
-            <div className="zoom" role="group" aria-label="拡大縮小">
-              <button className="icon-btn" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} aria-label="縮小">－</button>
-              <button className="zoom-level" onClick={() => setZoom(1)} title="ページ全体を表示">{Math.round(zoom * 100)}%</button>
-              <button className="icon-btn" onClick={() => setZoom((z) => Math.min(4, z + 0.25))} aria-label="拡大">＋</button>
-            </div>
+            <ZoomControl zoom={zoom} factor={zoomFactor} onChange={setZoom} />
           )}
           {panelTabs.map((t) => (
             <button key={t.id} className={`icon-btn ${panel === t.id ? "active" : ""}`} onClick={() => togglePanel(t.id)} title={t.label} aria-label={t.label}>
@@ -419,6 +432,72 @@ export default function Reader() {
           onAsk={() => createFromSelection("yellow", "ask")}
           onCopy={() => { navigator.clipboard.writeText(sel.text); clearSel(); toast("コピーしました"); }}
         />
+      )}
+    </div>
+  );
+}
+
+const ZOOM_MIN = 0.25;
+const ZOOM_MAX = 4;
+const clampZoom = (z: number) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, z));
+
+/** PDF zoom: －/＋ in 10% steps; the percentage opens a menu to type a value or fit the page / width. */
+function ZoomControl({ zoom, factor, onChange }: { zoom: PdfZoom; factor: number; onChange: (z: PdfZoom) => void }) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState("");
+  const root = useRef<HTMLDivElement>(null);
+  const pct = Math.round(factor * 100);
+  // Step from the zoom in effect to the next multiple of 10%.
+  const step = (dir: 1 | -1) => onChange(clampZoom((dir > 0 ? Math.floor(pct / 10) + 1 : Math.ceil(pct / 10) - 1) / 10));
+
+  useEffect(() => {
+    if (!open) return;
+    setText(String(pct));
+    const onDown = (e: PointerEvent) => !root.current?.contains(e.target as Node) && setOpen(false);
+    document.addEventListener("pointerdown", onDown);
+    return () => document.removeEventListener("pointerdown", onDown);
+    // Only when the menu opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const apply = () => {
+    const v = Number(text);
+    if (Number.isFinite(v) && v > 0) onChange(clampZoom(v / 100));
+    setOpen(false);
+  };
+  const choose = (z: PdfZoom) => {
+    onChange(z);
+    setOpen(false);
+  };
+
+  return (
+    <div className="zoom" role="group" aria-label="拡大縮小" ref={root}>
+      <button className="icon-btn" onClick={() => step(-1)} aria-label="縮小">－</button>
+      <button className="zoom-level" onClick={() => setOpen((v) => !v)} aria-expanded={open} title="拡大率を指定">
+        {zoom === "width" ? "幅" : `${pct}%`}
+      </button>
+      <button className="icon-btn" onClick={() => step(1)} aria-label="拡大">＋</button>
+      {open && (
+        <div className="zoom-menu">
+          <form className="row" onSubmit={(e) => { e.preventDefault(); apply(); }}>
+            <input
+              className="input"
+              type="number"
+              inputMode="numeric"
+              min={ZOOM_MIN * 100}
+              max={ZOOM_MAX * 100}
+              value={text}
+              autoFocus
+              aria-label="拡大率（%）"
+              onChange={(e) => setText(e.target.value)}
+              onFocus={(e) => e.target.select()}
+            />
+            <span>%</span>
+            <button className="btn primary small" type="submit">適用</button>
+          </form>
+          <button className={`btn small ${zoom === "width" ? "active" : ""}`} onClick={() => choose("width")}>横幅に合わせる</button>
+          <button className={`btn small ${zoom === "page" ? "active" : ""}`} onClick={() => choose("page")}>ページ全体</button>
+        </div>
       )}
     </div>
   );
