@@ -1,0 +1,45 @@
+# Fuguruma configuration (example for a systemd install: /etc/fuguruma/config.toml)
+# [library], [auth] and [ai] can also be edited from the web UI (Settings).
+# Saving from the web UI rewrites this file and drops these comments.
+
+[server]
+  addr = ":8080"
+  # Database, cover cache and session key. Back up this directory.
+  data_dir = "/var/lib/fuguruma"
+  # Any directory: local disk, external drive, NFS/SMB mount, ...
+  books_dir = "/srv/books"
+
+[library]
+  # "30m", "2h", or "0" to disable automatic rescans.
+  scan_interval = "30m"
+
+[auth]
+  # Set with `fuguruma -config FILE passwd` or from the web UI.
+  # Empty = no login (only for trusted networks).
+  password_hash = ""
+
+[ai]
+  # "none" | "anthropic" | "openai" | "claude-cli"
+  provider = "none"
+
+  [ai.anthropic]
+    api_key = ""
+    model = "claude-opus-5-5"
+    effort = "medium"   # low | medium | high | xhigh | max
+
+  # Any OpenAI-compatible Chat Completions API:
+  #   OpenAI      https://api.openai.com/v1
+  #   Gemini      https://generativelanguage.googleapis.com/v1beta/openai
+  #   OpenRouter  https://openrouter.ai/api/v1
+  #   Ollama      http://localhost:11434/v1
+  #   LM Studio   http://localhost:1234/v1
+  [ai.openai]
+    base_url = "https://api.openai.com/v1"
+    api_key = ""
+    model = ""
+
+  # Claude Code on this server (`claude -p`). Uses the CLI's own login.
+  # The command path can only be set here, not from the web UI.
+  [ai.claude_cli]
+    command = "claude"
+    model = ""

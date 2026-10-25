@@ -1,0 +1,15 @@
+services:
+  fuguruma:
+    build: .
+    container_name: fuguruma
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    # The image runs as a non-root user; make ./config and ./data writable by this uid.
+    user: "1000:1000"
+    # environment:
+    #   ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}   # overrides the config file
+    volumes:
+      - ./config:/config            # config.toml (settings)
+      - ./data:/data                # database, cover cache (your data)
+      - /path/to/books:/books:ro    # any directory with your books (read-only is fine)
