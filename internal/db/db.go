@@ -108,7 +108,6 @@ var migrations = []string{
 		created_at INTEGER NOT NULL
 	);
 	CREATE INDEX messages_conv ON messages(conversation_id, created_at);`,
-
 }
 
 func (s *Store) migrate() error {
