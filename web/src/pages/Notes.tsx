@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { api, Note, readerUrl } from "../api";
+import { api, Note } from "../api";
 import NoteEditor from "../components/NoteEditor";
 
 export default function Notes() {
@@ -52,7 +52,6 @@ export default function Notes() {
               <div style={{ fontWeight: 600 }}>{n.title || "無題のノート"}</div>
               <div className="small muted" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {n.bookTitle && <>📖 {n.bookTitle} · </>}
-                {n.locator && <>📍 {n.locatorLabel || "位置あり"} · </>}
                 {new Date(n.updatedAt).toLocaleString()}
               </div>
             </div>
@@ -65,24 +64,14 @@ export default function Notes() {
               onBack={() => nav("/notes")}
               onDelete={remove}
               onChange={(n) => setNotes((ns) => ns.map((x) => (x.id === n.id ? n : x)))}
-              extra={
-                current.bookId ? (
-                  <span className="pin">
-                    📖 {current.bookTitle}
-                    {current.locator ? (
-                      <>
-                        {" "}・ 📍 {current.locatorLabel || "位置あり"}
-                        <Link to={readerUrl(current.bookId, current.locator)}>本文のこの位置を開く</Link>
-                      </>
-                    ) : (
-                      <Link to={readerUrl(current.bookId)}>本を開く</Link>
-                    )}
-                  </span>
-                ) : undefined
-              }
             />
           ) : (
             <div className="empty">ノートを選択してください</div>
+          )}
+          {current?.bookId && (
+            <div style={{ padding: "8px 16px" }} className="small">
+              <Link to={`/read/${current.bookId}`}>📖 {current.bookTitle} を開く</Link>
+            </div>
           )}
         </main>
       </div>

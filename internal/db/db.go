@@ -104,10 +104,6 @@ var migrations = []string{
 		created_at INTEGER NOT NULL
 	);
 	CREATE INDEX messages_conv ON messages(conversation_id, created_at);`,
-
-	// Notes can be pinned to a position in their book (like a sticky note).
-	`ALTER TABLE notes ADD COLUMN locator TEXT NOT NULL DEFAULT '';
-	ALTER TABLE notes ADD COLUMN locator_label TEXT NOT NULL DEFAULT '';`,
 }
 
 func (s *Store) migrate() error {

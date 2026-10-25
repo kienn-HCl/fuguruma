@@ -89,30 +89,21 @@ type Note struct {
 	BookTitle string  `json:"bookTitle,omitempty"`
 	Title     string  `json:"title"`
 	Body      string  `json:"body"`
-	// Locator pins the note to a position in its book (null when not pinned);
-	// LocatorLabel is a human-readable description such as "第三章・42%".
-	Locator      json.RawMessage `json:"locator"`
-	LocatorLabel string          `json:"locatorLabel"`
-	CreatedAt    int64           `json:"createdAt"`
-	UpdatedAt    int64           `json:"updatedAt"`
+	CreatedAt int64   `json:"createdAt"`
+	UpdatedAt int64   `json:"updatedAt"`
 }
 
-const noteCols = `n.id, n.book_id, COALESCE(b.title, ''), n.title, n.body, n.locator, n.locator_label, n.created_at, n.updated_at`
+const noteCols = `n.id, n.book_id, COALESCE(b.title, ''), n.title, n.body, n.created_at, n.updated_at`
 
 func scanNote(r scanner) (*Note, error) {
 	var n Note
 	var bid sql.NullString
-	var loc string
-	if err := r.Scan(&n.ID, &bid, &n.BookTitle, &n.Title, &n.Body, &loc, &n.LocatorLabel, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := r.Scan(&n.ID, &bid, &n.BookTitle, &n.Title, &n.Body, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if bid.Valid {
 		n.BookID = &bid.String
 	}
-	if loc == "" {
-		loc = "null"
-	}
-	n.Locator = json.RawMessage(loc)
 	return &n, nil
 }
 
@@ -156,52 +147,19 @@ func (s *Store) CreateNote(n *Note) error {
 	n.ID = NewID()
 	n.CreatedAt = Now()
 	n.UpdatedAt = n.CreatedAt
-	if string(n.Locator) == "null" {
-		n.Locator = nil
-	}
-	_, err := s.DB.Exec(`INSERT INTO notes (id, book_id, title, body, locator, locator_label, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		n.ID, n.BookID, n.Title, n.Body, string(n.Locator), n.LocatorLabel, n.CreatedAt, n.UpdatedAt)
-	if len(n.Locator) == 0 {
-		n.Locator = json.RawMessage("null")
-	}
+	_, err := s.DB.Exec(`INSERT INTO notes (id, book_id, title, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
+		n.ID, n.BookID, n.Title, n.Body, n.CreatedAt, n.UpdatedAt)
 	return err
 }
 
-// NoteUpdate holds the fields to change; nil fields are left as they are.
-// A Locator of JSON null unpins the note.
-type NoteUpdate struct {
-	Title        *string
-	Body         *string
-	Locator      *json.RawMessage
-	LocatorLabel *string
-}
-
-func (s *Store) UpdateNote(id string, u NoteUpdate) error {
-	set := func(col string, v any) error {
-		_, err := s.DB.Exec(`UPDATE notes SET `+col+` = ?, updated_at = ? WHERE id = ?`, v, Now(), id)
-		return err
-	}
-	if u.Title != nil {
-		if err := set("title", *u.Title); err != nil {
+func (s *Store) UpdateNote(id string, title, body *string) error {
+	if title != nil {
+		if _, err := s.DB.Exec(`UPDATE notes SET title = ?, updated_at = ? WHERE id = ?`, *title, Now(), id); err != nil {
 			return err
 		}
 	}
-	if u.Body != nil {
-		if err := set("body", *u.Body); err != nil {
-			return err
-		}
-	}
-	if u.Locator != nil {
-		loc := string(*u.Locator)
-		if loc == "null" {
-			loc = ""
-		}
-		if err := set("locator", loc); err != nil {
-			return err
-		}
-	}
-	if u.LocatorLabel != nil {
-		if err := set("locator_label", *u.LocatorLabel); err != nil {
+	if body != nil {
+		if _, err := s.DB.Exec(`UPDATE notes SET body = ?, updated_at = ? WHERE id = ?`, *body, Now(), id); err != nil {
 			return err
 		}
 	}

@@ -357,7 +357,3 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .danger-zone { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
 
 /* pinned notes */
-.editor-extra { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 13px; }
-.pin { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; }
-.pin a, .pin button.link { color: var(--accent); background: none; border: none; padding: 0; cursor: pointer; font-size: 12px; text-decoration: none; }
-.pin a:hover, .pin button.link:hover { text-decoration: underline; }

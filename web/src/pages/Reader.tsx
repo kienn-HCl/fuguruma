@@ -43,7 +43,7 @@ export default function Reader() {
   const lastSaved = useRef(0);
 
   useEffect(() => {
-    // ?at=<locator JSON> opens the book at a specific place (e.g. from a pinned note).
+    // ?at=<locator JSON> opens the book at a specific place (e.g. a link from a note).
     let at: Locator | null = null;
     try {
       at = params.get("at") ? (JSON.parse(params.get("at")!) as Locator) : null;
@@ -160,36 +160,6 @@ export default function Reader() {
     toast(activeNote ? "ノートに引用しました" : "ノートを作成して引用しました", { label: "ノートを見る", run: () => setPanel("notes") });
   };
 
-  // ---- notes pinned to a position (sticky notes) ----
-  const here = () => ({
-    locator: pos.loc,
-    locatorLabel: `${pos.label ? `${pos.label}・` : ""}${Math.round(pos.pct * 100)}%`,
-  });
-
-  /** Creates a note pinned to the selection (with the quote) or to the current page. */
-  const createSticky = async (quote?: { text: string; locator: Locator }) => {
-    const pin = here();
-    const firstLine = quote?.text.trim().split("\n")[0] ?? "";
-    const n = await api.createNote({
-      bookId: id,
-      title: quote ? (firstLine.length > 24 ? `${firstLine.slice(0, 24)}…` : firstLine) : `付箋（${pin.locatorLabel}）`,
-      body: quote ? `> ${quote.text.trim().replace(/\n/g, "\n> ")}\n\n` : "",
-      locator: quote?.locator ?? pin.locator,
-      locatorLabel: pin.locatorLabel,
-    });
-    if (quote) clearSel();
-    setFreshNote(n.id);
-    noteSaved(n);
-    setPanel("notes");
-  };
-  const [freshNote, setFreshNote] = useState<string | null>(null); // focus the editor of a just-created sticky
-
-  const repin = async (n: Note, unpin = false) => {
-    const pin = here();
-    noteSaved(await api.updateNote(n.id, unpin ? { locator: null, locatorLabel: "" } : pin));
-    toast(unpin ? "位置の紐づけを外しました" : `位置を「${pin.locatorLabel}」に変更しました`);
-  };
-
   const noteSaved = (n: Note) => {
     setActiveNote(n);
     setNotes((ns) => [n, ...ns.filter((x) => x.id !== n.id)]);
@@ -258,22 +228,6 @@ export default function Reader() {
                   <NoteEditor
                     compact
                     note={activeNote}
-                    autoFocus={freshNote === activeNote.id}
-                    extra={
-                      activeNote.locator ? (
-                        <span className="pin">
-                          📍 {activeNote.locatorLabel || "位置あり"}
-                          <button className="link" onClick={() => jump(activeNote.locator!)}>移動</button>
-                          <button className="link" onClick={() => repin(activeNote)}>今の位置に変更</button>
-                          <button className="link" onClick={() => repin(activeNote, true)}>外す</button>
-                        </span>
-                      ) : (
-                        <span className="pin">
-                          本の位置に紐づいていません
-                          <button className="link" onClick={() => repin(activeNote)}>今の位置に紐づける</button>
-                        </span>
-                      )
-                    }
                     onBack={() => setActiveNote(null)}
                     onChange={noteSaved}
                     onDelete={async () => {
@@ -285,35 +239,19 @@ export default function Reader() {
                   />
                 ) : (
                   <div>
-                    <div className="row" style={{ padding: 10, flexWrap: "wrap" }}>
-                      <button className="btn primary" onClick={() => createSticky()} title="今読んでいる位置に紐づいたノートを作ります">
-                        📍 この位置に付箋
-                      </button>
+                    <div style={{ padding: 10 }}>
                       <button
-                        className="btn"
+                        className="btn primary"
                         onClick={async () => noteSaved(await api.createNote({ bookId: id, title: `${book.title} 読書メモ`, body: "" }))}
                       >
-                        ＋ ノート
+                        ＋ 新しいノート
                       </button>
                     </div>
-                    {notes.length === 0 && (
-                      <div className="empty small">
-                        この本のノートはまだありません。<br />
-                        本文を選択して「付箋」を押すと、その位置に紐づいたノートを作れます。開いているノートは、引用や AI 会話の書き出し先になります。
-                      </div>
-                    )}
+                    {notes.length === 0 && <div className="empty small">この本のノートはまだありません。<br />開いているノートが、引用や AI 会話の書き出し先になります。</div>}
                     {notes.map((n) => (
                       <div key={n.id} className="list-item" onClick={() => setActiveNote(n)}>
                         <div style={{ fontWeight: 600 }}>{n.title || "無題のノート"}</div>
-                        <div className="row small muted" style={{ gap: 6, flexWrap: "wrap" }}>
-                          {n.locator && (
-                            <span className="pin">
-                              📍 {n.locatorLabel || "位置あり"}
-                              <button className="link" onClick={(e) => { e.stopPropagation(); jump(n.locator!); }}>移動</button>
-                            </span>
-                          )}
-                          <span>{new Date(n.updatedAt).toLocaleString()}</span>
-                        </div>
+                        <div className="small muted">{new Date(n.updatedAt).toLocaleString()}</div>
                       </div>
                     ))}
                   </div>
@@ -375,20 +313,19 @@ export default function Reader() {
         </div>
       </footer>
 
-      {sel && <SelectionPopup sel={sel} aiEnabled={status.aiEnabled} onHighlight={addHighlight} onAsk={() => askAI(sel.text, sel.context, sel.locator)} onQuote={() => { quoteToNote(sel.text); clearSel(); }} onSticky={() => createSticky({ text: sel.text, locator: sel.locator })} onCopy={() => { navigator.clipboard.writeText(sel.text); clearSel(); toast("コピーしました"); }} />}
+      {sel && <SelectionPopup sel={sel} aiEnabled={status.aiEnabled} onHighlight={addHighlight} onAsk={() => askAI(sel.text, sel.context, sel.locator)} onQuote={() => { quoteToNote(sel.text); clearSel(); }} onCopy={() => { navigator.clipboard.writeText(sel.text); clearSel(); toast("コピーしました"); }} />}
     </div>
   );
 }
 
 function SelectionPopup({
-  sel, aiEnabled, onHighlight, onAsk, onQuote, onSticky, onCopy,
+  sel, aiEnabled, onHighlight, onAsk, onQuote, onCopy,
 }: {
   sel: Selection;
   aiEnabled: boolean;
   onHighlight: (color: string, openComment?: boolean) => void;
   onAsk: () => void;
   onQuote: () => void;
-  onSticky: () => void;
   onCopy: () => void;
 }) {
   // Place below the selection (above if near the bottom) so native mobile menus don't overlap.
@@ -403,7 +340,6 @@ function SelectionPopup({
       ))}
       <span className="sep" />
       <button onClick={() => onHighlight("yellow", true)}>メモ</button>
-      <button onClick={onSticky} title="この箇所に紐づいたノートを作る">付箋</button>
       <button onClick={onQuote} title="開いているノートに引用を追記">引用</button>
       {aiEnabled && <button onClick={onAsk}>✦ AIに聞く</button>}
       <button onClick={onCopy}>コピー</button>

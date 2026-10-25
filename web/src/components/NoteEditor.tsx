@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, Note } from "../api";
 import Markdown from "./Markdown";
 
@@ -6,17 +6,13 @@ type Mode = "edit" | "preview" | "split";
 
 /** Markdown note editor with debounced autosave. */
 export default function NoteEditor({
-  note, onChange, onDelete, onBack, compact = false, extra, autoFocus = false,
+  note, onChange, onDelete, onBack, compact = false,
 }: {
   note: Note;
   onChange?: (n: Note) => void;
   onDelete?: () => void;
   onBack?: () => void;
   compact?: boolean;
-  /** Shown under the title, e.g. where in the book the note is pinned. */
-  extra?: ReactNode;
-  /** Focus the body (cursor at the end) when the editor opens. */
-  autoFocus?: boolean;
 }) {
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
@@ -24,15 +20,6 @@ export default function NoteEditor({
   const [saved, setSaved] = useState(true);
   const last = useRef({ title: note.title, body: note.body });
   const ta = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (!autoFocus || !ta.current) return;
-    const el = ta.current;
-    el.focus();
-    el.setSelectionRange(el.value.length, el.value.length);
-    // Only when a note is opened, not on every save.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [note.id]);
 
   // Reload when a different note is opened or the note is updated elsewhere (e.g. AI export appended).
   useEffect(() => {
@@ -80,7 +67,6 @@ export default function NoteEditor({
         <input className="editor-title" value={title} placeholder="無題のノート" onChange={(e) => setTitle(e.target.value)} />
         <span className="small muted">{saved ? "保存済み" : "保存中…"}</span>
       </div>
-      {extra && <div className="editor-extra">{extra}</div>}
       <div className="row" style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
         <button className="btn ghost small" onClick={() => wrap("## ", "", true)} title="見出し">H</button>
         <button className="btn ghost small" onClick={() => wrap("**", "**")} title="太字"><b>B</b></button>

@@ -90,17 +90,13 @@
 - PDF：ページ単位表示、幅フィット、ズーム、ページ番号ジャンプ。
 - 表示設定（端末ごと・localStorage）：文字サイズ、本文フォント、テーマ（ライト / セピア / ダーク）。テーマはパネルやボタンを含むリーダー全体の配色を決め、OS のライト / ダーク設定には左右されない。
 - 操作部は画面下部にまとめる（スマホで指が届きやすいように。PC も同じ配置）：進捗スライダーの行と、本棚へ戻る・書名・PDF のズーム・目次・表示設定・ハイライト・ノート・AI の行。中央タップでツールバーを隠す。
-- `?at=<locator JSON>` 付きの URL で開くと、その位置から表示する（付箋からのジャンプ用）。
+- `?at=<locator JSON>` 付きの URL で開くと、その位置から表示する（ノートなどからのジャンプ用）。
 - **読書位置の同期**：位置（EPUB は CFI、PDF はページ番号）と進捗率をサーバーに保存。別端末で開くと続きから。後勝ち（`updated_at` 比較）。
 
 ### 3.4 ハイライトと読書メモ
-- テキスト選択 → ポップアップから「ハイライト（色選択）」「メモ」「付箋」「引用」「AIに聞く」「コピー」。
+- テキスト選択 → ポップアップから「ハイライト（色選択）」「メモ」「引用」「AIに聞く」「コピー」。
 - ハイライト：位置（EPUB: CFI range / PDF: ページ + 正規化矩形）・選択テキスト・色・短いコメントを保存。リーダー上に再描画。
 - 読書メモ（ノート）：Markdown の自由記述ドキュメント。本に紐づくもの・紐づかないもの両方可。編集 / プレビュー切替。
-- **付箋（位置つきノート）**：ノートを本文の位置に紐づけられる（`locator` と表示用の `locator_label`、例「第三章・42%」）。
-  - 作り方：選択メニューの「付箋」（選択箇所の引用入り）、またはノートパネルの「この位置に付箋」（今のページ）。
-  - 既存のノートも「今の位置に紐づける / 今の位置に変更 / 外す」で付け替えられる。
-  - リーダーのノートパネル、ノート画面の一覧に位置を表示し、「移動」「本文のこの位置を開く」でその位置へ戻れる。
 - サイドパネルで「ハイライト一覧」「この本のノート」を閲覧し、クリックで該当箇所へジャンプ。
 - 全体の「ノート」画面：全ノートの一覧・検索・編集。
 
@@ -220,7 +216,7 @@ book_tags(book_id, tag_id, PK(book_id, tag_id))
 progress(book_id PK, locator TEXT, percent REAL, updated_at INT)
 highlights(id TEXT PK, book_id, locator TEXT /*JSON*/, text, color, comment,
            created_at, updated_at)
-notes(id TEXT PK, book_id NULL, title, body /*Markdown*/, locator /*JSON or empty*/, locator_label, created_at, updated_at)
+notes(id TEXT PK, book_id NULL, title, body /*Markdown*/, created_at, updated_at)
 conversations(id TEXT PK, book_id, title, passage, context, locator, created_at, updated_at)
 messages(id TEXT PK, conversation_id, role /*user|assistant*/, content, created_at)
 ```
@@ -252,7 +248,7 @@ messages(id TEXT PK, conversation_id, role /*user|assistant*/, content, created_
 | GET / POST | `/api/books/{id}/highlights` | 一覧 / 作成 |
 | PATCH / DELETE | `/api/highlights/{id}` | 編集 / 削除 |
 | GET / POST | `/api/notes?bookId=&q=` | 一覧 / 作成 |
-| GET / PATCH / DELETE | `/api/notes/{id}` | 取得 / 編集 / 削除（PATCH の `locator` は省略で変更なし、`null` で紐づけ解除） |
+| GET / PATCH / DELETE | `/api/notes/{id}` | 取得 / 編集 / 削除 |
 | GET / POST | `/api/books/{id}/conversations` | 会話一覧 / 作成 `{passage, context, locator}` |
 | GET / PATCH / DELETE | `/api/conversations/{id}` | 取得（メッセージ込み）/ 改題 / 削除 |
 | POST | `/api/conversations/{id}/messages` | 送信 → **SSE** で応答ストリーム |
