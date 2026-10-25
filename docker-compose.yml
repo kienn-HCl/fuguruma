@@ -13,3 +13,5 @@ services:
       - ./config:/config            # config.toml (settings)
       - ./data:/data                # database, cover cache (your data)
       - /path/to/books:/books:ro    # any directory with your books (read-only is fine)
+      # To upload books from the web UI, mount the upload folder writable:
+      # - /path/to/books/Uploads:/books/Uploads

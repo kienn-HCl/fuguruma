@@ -28,6 +28,9 @@ WorkingDirectory=/var/lib/fuguruma
 NoNewPrivileges=true
 ProtectSystem=strict
 ReadWritePaths=/etc/fuguruma
+# Uploading books from the web UI writes to books_dir/upload_dir; allow it
+# (the rest of the books directory stays read-only):
+# ReadWritePaths=/srv/books/Uploads
 ProtectHome=read-only
 PrivateTmp=true
 PrivateDevices=true

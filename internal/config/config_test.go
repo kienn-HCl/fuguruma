@@ -50,4 +50,14 @@ func TestLoadUpdateAndEnv(t *testing.T) {
 	if err := m.Update(func(c *Config) { c.AI.Provider = "bogus" }); err == nil {
 		t.Error("invalid provider accepted")
 	}
+	for _, d := range []string{"/etc", "..", "../x", "a/../../x"} {
+		if err := m.Update(func(c *Config) { c.Library.UploadDir = d }); err == nil {
+			t.Errorf("upload_dir %q outside books_dir accepted", d)
+		}
+	}
+	for _, d := range []string{"", "Uploads", "a/b", "./x"} {
+		if err := m.Update(func(c *Config) { c.Library.UploadDir = d }); err != nil {
+			t.Errorf("upload_dir %q rejected: %v", d, err)
+		}
+	}
 }

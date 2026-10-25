@@ -79,6 +79,8 @@ export interface Status {
   loggedIn: boolean;
   aiEnabled: boolean;
   aiProvider: string;
+  uploadEnabled: boolean;
+  uploadMaxMb: number;
 }
 
 export type AIProvider = "none" | "anthropic" | "openai" | "claude-cli";
@@ -87,7 +89,7 @@ export interface Settings {
   configPath: string;
   envOverrides: string[] | null;
   server: { addr: string; dataDir: string; booksDir: string };
-  library: { scanInterval: string };
+  library: { scanInterval: string; uploadEnabled: boolean; uploadDir: string; uploadMaxMb: number };
   auth: { passwordSet: boolean };
   ai: {
     provider: AIProvider;
@@ -144,7 +146,7 @@ export const api = {
   logout: () => req("POST", "/api/logout"),
 
   settings: () => req<Settings>("GET", "/api/settings"),
-  saveSettings: (p: { library?: { scanInterval: string }; ai?: AIPatch }) => req<Settings>("PUT", "/api/settings", p),
+  saveSettings: (p: { library?: Partial<Settings["library"]>; ai?: AIPatch }) => req<Settings>("PUT", "/api/settings", p),
   changePassword: (current: string, next: string) =>
     req<{ ok: boolean; passwordSet: boolean }>("POST", "/api/settings/password", { current, new: next }),
   testAI: (p: AIPatch) => req<{ ok: boolean; reply?: string; error?: string }>("POST", "/api/settings/ai/test", p),
@@ -231,4 +233,41 @@ export async function* sendMessage(convId: string, content: string, signal?: Abo
       }
     }
   }
+}
+
+export class UploadError extends Error {
+  constructor(public status: number, message: string, public bookId?: string) {
+    super(message);
+  }
+}
+
+/**
+ * Uploads one book file. Uses XMLHttpRequest because fetch cannot report
+ * upload progress. onProgress receives a fraction between 0 and 1.
+ */
+export function uploadBook(file: File, tagIds: number[], onProgress?: (p: number) => void): Promise<Book> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    // tagIds must precede the file: the server reads the parts in order.
+    form.append("tagIds", tagIds.join(","));
+    form.append("file", file, file.name);
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", "/api/library/upload");
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(e.loaded / e.total);
+    xhr.onload = () => {
+      let body: { error?: string; bookId?: string } & Partial<Book> = {};
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        /* not json */
+      }
+      if (xhr.status === 201) resolve(body as Book);
+      else {
+        if (xhr.status === 401) window.dispatchEvent(new Event("fuguruma:unauthorized"));
+        reject(new UploadError(xhr.status, body.error ?? xhr.statusText, body.bookId));
+      }
+    };
+    xhr.onerror = () => reject(new UploadError(0, "通信に失敗しました"));
+    xhr.send(form);
+  });
 }

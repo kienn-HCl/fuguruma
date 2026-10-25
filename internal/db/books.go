@@ -177,6 +177,20 @@ func (s *Store) AllBookFiles() ([]*Book, error) {
 	return out, rows.Err()
 }
 
+// FindByFingerprint returns a book with the given content fingerprint,
+// preferring one whose file is present, or ErrNotFound.
+func (s *Store) FindByFingerprint(fp string) (*Book, error) {
+	var id string
+	err := s.DB.QueryRow(`SELECT id FROM books WHERE fingerprint = ? ORDER BY missing LIMIT 1`, fp).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return s.GetBook(id)
+}
+
 func (s *Store) InsertBook(b *Book) error {
 	_, err := s.DB.Exec(`INSERT INTO books (id, path, format, title, author, description, fingerprint, size, mtime, has_cover, missing, added_at, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,

@@ -140,31 +140,8 @@ func (l *Library) Scan() (*ScanResult, error) {
 			res.Moved++
 			continue
 		}
-		b := &db.Book{
-			ID:          db.NewID(),
-			Path:        f.rel,
-			Format:      f.format,
-			Title:       strings.TrimSuffix(filepath.Base(f.rel), filepath.Ext(f.rel)),
-			Fingerprint: fp,
-			Size:        f.info.Size(),
-			Mtime:       f.info.ModTime().UnixMilli(),
-			AddedAt:     db.Now(),
-			UpdatedAt:   db.Now(),
-		}
-		if f.format == "epub" {
-			if m, err := ReadEpubMeta(f.abs); err == nil {
-				if m.Title != "" {
-					b.Title = m.Title
-				}
-				b.Author, b.Description = m.Author, m.Description
-				if len(m.Cover) > 0 && os.WriteFile(l.CoverPath(b.ID), m.Cover, 0o644) == nil {
-					b.HasCover = true
-				}
-			} else {
-				log.Printf("scan: epub meta %s: %v", f.rel, err)
-			}
-		}
-		if err := l.Store.InsertBook(b); err != nil {
+		b, err := l.addBook(f.rel, f.abs, f.format, f.info, fp)
+		if err != nil {
 			log.Printf("scan: insert %s: %v", f.rel, err)
 			continue
 		}
@@ -180,6 +157,39 @@ func (l *Library) Scan() (*ScanResult, error) {
 		}
 	}
 	return res, nil
+}
+
+// addBook registers a file that is not in the database yet, reading EPUB
+// metadata and cover when available.
+func (l *Library) addBook(rel, abs, format string, info fs.FileInfo, fp string) (*db.Book, error) {
+	b := &db.Book{
+		ID:          db.NewID(),
+		Path:        rel,
+		Format:      format,
+		Title:       strings.TrimSuffix(filepath.Base(rel), filepath.Ext(rel)),
+		Fingerprint: fp,
+		Size:        info.Size(),
+		Mtime:       info.ModTime().UnixMilli(),
+		AddedAt:     db.Now(),
+		UpdatedAt:   db.Now(),
+	}
+	if format == "epub" {
+		if m, err := ReadEpubMeta(abs); err == nil {
+			if m.Title != "" {
+				b.Title = m.Title
+			}
+			b.Author, b.Description = m.Author, m.Description
+			if len(m.Cover) > 0 && os.WriteFile(l.CoverPath(b.ID), m.Cover, 0o644) == nil {
+				b.HasCover = true
+			}
+		} else {
+			log.Printf("library: epub meta %s: %v", rel, err)
+		}
+	}
+	if err := l.Store.InsertBook(b); err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 // fingerprint identifies file content cheaply: size + first 1MiB + last 64KiB.

@@ -51,6 +51,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/books/{id}/progress", s.getProgress)
 	m.HandleFunc("PUT /api/books/{id}/progress", s.putProgress)
 	m.HandleFunc("POST /api/library/scan", s.scan)
+	m.HandleFunc("POST /api/library/upload", s.upload)
 
 	m.HandleFunc("GET /api/tags", s.listTags)
 	m.HandleFunc("POST /api/tags", s.createTag)
@@ -170,11 +171,14 @@ func handleErr(w http.ResponseWriter, err error) {
 
 func (s *Server) status(w http.ResponseWriter, r *http.Request) {
 	p, name, _ := s.AI.Get()
+	lib := s.Conf.Get().Library
 	writeJSON(w, map[string]any{
-		"authRequired": s.Auth.Enabled(),
-		"loggedIn":     s.Auth.LoggedIn(r),
-		"aiEnabled":    p != nil,
-		"aiProvider":   name,
+		"authRequired":  s.Auth.Enabled(),
+		"loggedIn":      s.Auth.LoggedIn(r),
+		"aiEnabled":     p != nil,
+		"aiProvider":    name,
+		"uploadEnabled": lib.UploadEnabled,
+		"uploadMaxMb":   lib.UploadMaxMB,
 	})
 }
 
