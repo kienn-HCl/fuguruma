@@ -62,3 +62,14 @@ jobs:
 
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+  nix:
+    # Keeps flake.nix buildable; fails when go.mod changes without updating vendorHash.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: nix build
+        run: nix build -L
+      - name: nix flake check
+        run: nix flake check -L

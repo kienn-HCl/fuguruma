@@ -83,6 +83,13 @@ make build                          # web をビルドし、bin/fuguruma を生�
 make build GOOS=linux GOARCH=arm64  # 別アーキテクチャ向けのクロスコンパイル
 ```
 
+### Nix で使う
+
+```bash
+nix run github:kienn-HCl/fuguruma -- -config ./config.toml   # ビルドしてそのまま起動
+nix build github:kienn-HCl/fuguruma                          # ./result/bin/fuguruma ができる
+```
+
 ### とりあえず試す
 
 ```bash
@@ -207,7 +214,10 @@ books.example.com {
 
 ### 開発
 
+[Nix](https://nixos.org/) があれば `nix develop` で開発に必要なツール一式（Go、Node.js、gopls、goimports、govulncheck、GoReleaser、make）が入ったシェルに入れます。Nix を使わない場合は Go 1.26 以上と Node.js 22 以上を各自で用意してください。
+
 ```bash
+nix develop    # 開発用シェルに入る（以降のコマンドはこの中で）
 make dev-api   # API サーバー（config.toml を使用、:8080）
 make dev-web   # Vite 開発サーバー（:5173、/api は :8080 へプロキシ）
 make test      # go test
@@ -217,6 +227,7 @@ make notices   # 依存ライブラリを変えたら THIRD_PARTY_NOTICES.md を
 
 - **CI**（`.github/workflows/ci.yml`）：プッシュとプルリクエストごとに、Web UI のビルド、gofmt、go vet、go test、起動確認、THIRD_PARTY_NOTICES.md が最新か、govulncheck を実行します。
 - **リリース**（`.github/workflows/release.yml`）：`v0.1.0` のようなタグを push すると、GoReleaser が各 OS 向けのバイナリをビルドして GitHub Releases に公開します。
+- **Nix**：`nix build` で Web UI 込みのバイナリを、`nix flake check` で同じビルドを確認できます。CI でも実行しています。Go の依存（`go.mod` / `go.sum`）を変えたら、`flake.nix` の `vendorHash` を `lib.fakeHash` にして `nix build` し、エラーに出たハッシュに置き換えてください（npm 側は `package-lock.json` から自動で取得するので更新不要です）。
 - **依存関係の更新**：Dependabot（`.github/dependabot.yml`）が Go・npm・GitHub Actions の更新を毎週提案します。
 
 ```
