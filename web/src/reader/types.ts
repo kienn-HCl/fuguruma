@@ -1,4 +1,4 @@
-import { Highlight, Locator } from "../api";
+import { Locator } from "../api";
 
 export interface TocItem {
   label: string;
@@ -15,11 +15,30 @@ export interface Selection {
   rect: { left: number; top: number; bottom: number; width: number };
 }
 
+/** A highlighted passage drawn in the book. */
+export interface Mark {
+  id: string;
+  locator: Locator;
+  color: string;
+  /** The memo has a body or AI conversations (drawn with an underline). */
+  annotated: boolean;
+}
+
+/** Where a mark is on screen (viewport coordinates of its first visible line). */
+export interface Anchor {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 export interface ReaderSettings {
   theme: "light" | "sepia" | "dark";
   fontSize: number; // percent, EPUB only
   /** EPUB body font: the book's own CSS, or a forced gothic / mincho stack. */
   font: "book" | "sans" | "serif";
+  /** Show memos in a margin next to the text on wide screens. */
+  margin: boolean;
 }
 
 /** Imperative API shared by the EPUB and PDF views. */
@@ -30,18 +49,22 @@ export interface ReaderHandle {
   /** Go to a fraction (0..1) of the book. */
   goToPercent(p: number): void;
   clearSelection(): void;
+  /** Screen positions of the marks visible now. */
+  anchors(): Record<string, Anchor>;
 }
 
 export interface ReaderViewProps {
   url: string;
   bookId: string;
   initial: Locator | null;
-  highlights: Highlight[];
+  marks: Mark[];
   settings: ReaderSettings;
   onReady(toc: TocItem[]): void;
   onRelocate(loc: Locator, percent: number | null, label: string): void;
   onSelect(sel: Selection | null): void;
-  onHighlightClick(id: string): void;
+  onMarkClick(id: string): void;
+  /** The visible content moved or was redrawn (page turn, resize, scroll). */
+  onLayout?(): void;
   /** Tap in the middle of the page. */
   onCenterTap(): void;
   /** PDF only: zoom factor relative to fitting the page (1 = fit). */

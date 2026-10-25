@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { api, Conversation, Locator, Message, Note, sendMessage } from "../api";
+import { api, Conversation, Locator, Memo, Message, Saved, sendMessage } from "../api";
 import Markdown from "./Markdown";
 import { toast } from "./Toast";
 
@@ -8,51 +7,74 @@ const suggestions = ["わかりやすく解説して", "背景や前提知識を
 
 /** AI tab of the reader panel: conversation list, or one open conversation. */
 export default function AiPanel({
-  bookId, openId, onOpen, onJump, activeNote, onNoteSaved, enabled,
+  list, memos, openId, onOpen, onReload, onJump, onShowMemo, onSaved, enabled,
 }: {
-  bookId: string;
+  /** Conversations of the book. */
+  list: Conversation[];
+  memos: Memo[];
   openId: string | null;
   onOpen: (id: string | null) => void;
+  /** The list changed (title set, conversation deleted). */
+  onReload: () => void;
   onJump: (loc: Locator) => void;
-  activeNote: Note | null;
-  onNoteSaved: (n: Note) => void;
+  onShowMemo: (m: Memo) => void;
+  onSaved: (s: Saved) => void;
   enabled: boolean;
 }) {
-  const [list, setList] = useState<Conversation[]>([]);
-  useEffect(() => {
-    if (!openId) api.conversations(bookId).then(setList);
-  }, [bookId, openId]);
-
   if (openId) {
-    return <Chat key={openId} id={openId} onBack={() => onOpen(null)} onJump={onJump} activeNote={activeNote} onNoteSaved={onNoteSaved} enabled={enabled} />;
+    const conv = list.find((c) => c.id === openId);
+    const memo = memos.find((m) => m.id === conv?.memoId) ?? null;
+    return (
+      <Chat
+        key={openId}
+        id={openId}
+        memo={memo}
+        onBack={() => {
+          onOpen(null);
+          onReload();
+        }}
+        onJump={onJump}
+        onShowMemo={onShowMemo}
+        onSaved={onSaved}
+        onChanged={onReload}
+        enabled={enabled}
+      />
+    );
   }
   return (
     <div>
       {!enabled && <div className="empty small">AI は無効です。<a href="/settings">設定画面</a>から AI プロバイダを設定してください。</div>}
       <div className="small muted" style={{ padding: "10px 16px" }}>本文を選択して「AIに聞く」で会話を始めます。</div>
       {list.length === 0 && <div className="empty">まだ会話はありません</div>}
-      {list.map((c) => (
-        <div key={c.id} className="list-item" onClick={() => onOpen(c.id)}>
-          <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.title || "（無題）"}</div>
-          {c.passage && <blockquote className="quote">{c.passage}</blockquote>}
-          <div className="small muted" style={{ marginTop: 4 }}>{new Date(c.updatedAt).toLocaleString()}</div>
-        </div>
-      ))}
+      {list.map((c) => {
+        const memo = memos.find((m) => m.id === c.memoId);
+        return (
+          <div key={c.id} className="list-item" onClick={() => onOpen(c.id)}>
+            <div style={{ fontWeight: 600, marginBottom: 4 }}>{c.title || "（無題）"}</div>
+            {c.passage && <blockquote className="quote">{c.passage}</blockquote>}
+            <div className="small muted" style={{ marginTop: 4 }}>
+              {memo && <>📝 {memo.label || "メモ"} · </>}
+              {new Date(c.updatedAt).toLocaleString()}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 function Chat({
-  id, onBack, onJump, activeNote, onNoteSaved, enabled,
+  id, memo, onBack, onJump, onShowMemo, onSaved, onChanged, enabled,
 }: {
   id: string;
+  memo: Memo | null;
   onBack: () => void;
   onJump: (loc: Locator) => void;
-  activeNote: Note | null;
-  onNoteSaved: (n: Note) => void;
+  onShowMemo: (m: Memo) => void;
+  onSaved: (s: Saved) => void;
+  onChanged: () => void;
   enabled: boolean;
 }) {
-  const nav = useNavigate();
   const [conv, setConv] = useState<Conversation | null>(null);
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [streaming, setStreaming] = useState<string | null>(null);
@@ -96,7 +118,11 @@ function Chat({
           setStreaming(null);
         }
       }
-      if (!title) api.conversation(id).then((c) => setTitle(c.title));
+      if (!title)
+        api.conversation(id).then((c) => {
+          setTitle(c.title);
+          onChanged();
+        });
     } catch (e) {
       if ((e as Error).name === "AbortError") {
         // The server discards an interrupted exchange; resync with it.
@@ -109,24 +135,18 @@ function Chat({
     }
   };
 
-  const savedToast = (n: Note) => {
-    onNoteSaved(n);
-    toast(activeNote ? `「${n.title || "ノート"}」に追記しました` : "ノートを作成しました", {
-      label: "開く",
-      run: () => nav(`/notes/${n.id}`),
-    });
+  const saved = (r: Saved) => {
+    onSaved(r);
+    const m = r.memo;
+    toast(m ? "メモに追記しました" : "本のノートに追記しました", m ? { label: "メモを見る", run: () => onShowMemo(m) } : undefined);
   };
 
-  const exportAll = async (messageIds?: string[]) => {
-    const n = await api.exportConversation(id, { noteId: activeNote?.id, messageIds });
-    savedToast(n);
-  };
+  const exportAll = async (messageIds?: string[]) => saved(await api.exportConversation(id, { messageIds }));
 
   const summarize = async () => {
     setBusy("summarize");
     try {
-      const n = await api.summarizeConversation(id, { noteId: activeNote?.id });
-      savedToast(n);
+      saved(await api.summarizeConversation(id));
     } catch (e) {
       toast((e as Error).message);
     } finally {
@@ -141,7 +161,7 @@ function Chat({
   };
 
   if (!conv) return <div className="empty">読み込み中…</div>;
-  const target = activeNote ? `「${activeNote.title || "無題"}」に追記` : "新規ノート";
+  const dest = memo ? "メモ" : "ノート";
 
   return (
     <div className="chat">
@@ -154,7 +174,7 @@ function Chat({
             value={title}
             placeholder="（無題）"
             onChange={(e) => setTitle(e.target.value)}
-            onBlur={() => title !== conv.title && api.renameConversation(id, title)}
+            onBlur={() => title !== conv.title && api.renameConversation(id, title).then(onChanged)}
           />
           <button className="btn ghost small danger" onClick={removeConv}>削除</button>
         </div>
@@ -163,13 +183,17 @@ function Chat({
             {conv.passage}
           </blockquote>
         )}
+        {memo && (
+          <button className="link small" style={{ marginTop: 4 }} onClick={() => onShowMemo(memo)}>
+            📝 メモ（{memo.label || "場所不明"}）に紐づいた会話
+          </button>
+        )}
         {msgs.length > 0 && (
           <div className="row" style={{ marginTop: 8, flexWrap: "wrap", gap: 6 }}>
-            <button className="btn small" onClick={() => exportAll()} title={target}>📝 会話をノートへ</button>
-            <button className="btn small" onClick={summarize} disabled={!!busy || !enabled}>
-              {busy === "summarize" ? "要約中…" : "✨ 要約してノートへ"}
+            <button className="btn small" onClick={() => exportAll()} title={`会話を${dest}に追記`}>📝 会話を{dest}へ</button>
+            <button className="btn small" onClick={summarize} disabled={!!busy || !enabled} title={`AI が会話を要約して${dest}に追記`}>
+              {busy === "summarize" ? "要約中…" : `✨ 要約して${dest}へ`}
             </button>
-            <span className="small muted">→ {target}</span>
           </div>
         )}
       </div>
@@ -179,7 +203,7 @@ function Chat({
             {m.role === "assistant" ? <Markdown text={m.content} /> : m.content}
             {m.role === "assistant" && (
               <div className="msg-actions">
-                <button className="btn ghost small" onClick={() => exportAll([m.id])}>ノートへ</button>
+                <button className="btn ghost small" onClick={() => exportAll([m.id])}>{dest}へ</button>
                 <button className="btn ghost small" onClick={() => navigator.clipboard.writeText(m.content).then(() => toast("コピーしました"))}>コピー</button>
               </div>
             )}

@@ -31,6 +31,12 @@ func (s *Server) createConversation(w http.ResponseWriter, r *http.Request) {
 		handleErr(w, err)
 		return
 	}
+	if c.MemoID != nil {
+		if m, err := s.Store.GetMemo(*c.MemoID); err != nil || m.BookID != c.BookID {
+			writeErr(w, http.StatusBadRequest, "memo not found in this book")
+			return
+		}
+	}
 	if r := []rune(c.Context); len(r) > 6000 {
 		c.Context = string(r[:6000])
 	}
@@ -178,41 +184,42 @@ func (s *Server) postMessage(w http.ResponseWriter, r *http.Request) {
 	send(map[string]any{"type": "done", "message": am})
 }
 
-type noteTarget struct {
-	NoteID     string   `json:"noteId"`
-	MessageIDs []string `json:"messageIds"`
+// saved tells the client where an exported conversation went.
+type saved struct {
+	Memo *db.Memo `json:"memo,omitempty"`
+	Note *db.Note `json:"note,omitempty"`
 }
 
-// saveToNote appends md to an existing note, or creates a new note for the book.
-func (s *Server) saveToNote(conv *db.Conversation, noteID, md string) (*db.Note, error) {
-	if noteID != "" {
-		n, err := s.Store.GetNote(noteID)
-		if err != nil {
+// saveConversation appends md to the conversation's memo, or to the book's
+// note when the conversation has no memo (e.g. the memo was deleted).
+func (s *Server) saveConversation(conv *db.Conversation, md string) (*saved, error) {
+	if conv.MemoID != nil {
+		if err := s.Store.AppendToMemo(*conv.MemoID, md); err != nil {
 			return nil, err
 		}
-		body := n.Body
-		if strings.TrimSpace(body) != "" {
-			body += "\n\n---\n\n"
-		}
-		body += md
-		if err := s.Store.UpdateNote(n.ID, nil, &body); err != nil {
-			return nil, err
-		}
-		return s.Store.GetNote(n.ID)
+		m, err := s.Store.GetMemo(*conv.MemoID)
+		return &saved{Memo: m}, err
 	}
-	title := conv.Title
-	if title == "" {
-		title = truncate(conv.Passage, 30)
-	}
-	n := &db.Note{BookID: &conv.BookID, Title: title, Body: md}
-	if err := s.Store.CreateNote(n); err != nil {
+	n, err := s.Store.BookNote(conv.BookID)
+	if err != nil {
 		return nil, err
 	}
-	return s.Store.GetNote(n.ID)
+	body := strings.TrimRight(n.Body, "\n")
+	if body != "" {
+		body += "\n\n"
+	}
+	body += md
+	if err := s.Store.UpdateNote(n.ID, nil, &body); err != nil {
+		return nil, err
+	}
+	n, err = s.Store.GetNote(n.ID)
+	return &saved{Note: n}, err
 }
 
 func (s *Server) export(w http.ResponseWriter, r *http.Request) {
-	var body noteTarget
+	var body struct {
+		MessageIDs []string `json:"messageIds"`
+	}
 	if !readJSON(w, r, &body) {
 		return
 	}
@@ -226,7 +233,7 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request) {
 		pick[id] = true
 	}
 	var sb strings.Builder
-	if conv.Passage != "" {
+	if conv.Passage != "" && conv.MemoID == nil { // a memo already shows its passage
 		sb.WriteString(quote(conv.Passage) + "\n\n")
 	}
 	for _, m := range conv.Messages {
@@ -239,21 +246,17 @@ func (s *Server) export(w http.ResponseWriter, r *http.Request) {
 			sb.WriteString(m.Content + "\n\n")
 		}
 	}
-	n, err := s.saveToNote(conv, body.NoteID, strings.TrimSpace(sb.String()))
+	out, err := s.saveConversation(conv, strings.TrimSpace(sb.String()))
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
-	writeJSON(w, n)
+	writeJSON(w, out)
 }
 
 func (s *Server) summarize(w http.ResponseWriter, r *http.Request) {
 	provider, ok := s.provider(w)
 	if !ok {
-		return
-	}
-	var body noteTarget
-	if !readJSON(w, r, &body) {
 		return
 	}
 	conv, err := s.Store.GetConversation(r.PathValue("id"))
@@ -270,17 +273,17 @@ func (s *Server) summarize(w http.ResponseWriter, r *http.Request) {
 		handleErr(w, err)
 		return
 	}
-	md, err := ai.Summarize(r.Context(), provider, book, turnsOf(conv.Messages))
+	md, err := ai.Summarize(r.Context(), provider, book, turnsOf(conv.Messages), conv.MemoID != nil)
 	if err != nil {
 		writeErr(w, http.StatusBadGateway, err.Error())
 		return
 	}
-	n, err := s.saveToNote(conv, body.NoteID, strings.TrimSpace(md))
+	out, err := s.saveConversation(conv, strings.TrimSpace(md))
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
-	writeJSON(w, n)
+	writeJSON(w, out)
 }
 
 func quote(s string) string {

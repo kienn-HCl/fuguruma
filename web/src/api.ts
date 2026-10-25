@@ -34,25 +34,43 @@ export interface Book {
   progress: Progress | null;
 }
 
-export interface Highlight {
+/**
+ * A memo marks a passage of the book ("highlight": the quote, a colour and a
+ * Markdown body, which may be empty) or is free text placed among the memos
+ * in the book's note ("text", ordered by a locator copied from the memo it follows).
+ */
+export interface Memo {
   id: string;
   bookId: string;
+  kind: "highlight" | "text";
   locator: Locator;
+  /** Human-readable position, e.g. "第三章・42%" or "p.12". */
+  label: string;
   text: string;
   color: string;
-  comment: string;
+  body: string;
+  /** Orders memos that share a position. */
+  sort: number;
   createdAt: number;
   updatedAt: number;
 }
 
+/** The note of a book (one per book, shown above its memos) or a free-standing note. */
 export interface Note {
   id: string;
   bookId: string | null;
   bookTitle?: string;
   title: string;
   body: string;
+  memoCount: number;
   createdAt: number;
   updatedAt: number;
+}
+
+/** Where an exported AI conversation went. */
+export interface Saved {
+  memo?: Memo;
+  note?: Note;
 }
 
 export interface Message {
@@ -69,6 +87,7 @@ export interface Conversation {
   title: string;
   passage: string;
   locator: Locator | null;
+  memoId: string | null;
   createdAt: number;
   updatedAt: number;
   messages?: Message[];
@@ -173,27 +192,30 @@ export const api = {
   updateTag: (id: number, p: { name?: string; color?: string }) => req("PATCH", `/api/tags/${id}`, p),
   deleteTag: (id: number) => req("DELETE", `/api/tags/${id}`),
 
-  highlights: (bookId: string) => req<Highlight[]>("GET", `/api/books/${bookId}/highlights`),
-  createHighlight: (bookId: string, h: { locator: Locator; text: string; color: string; comment?: string }) =>
-    req<Highlight>("POST", `/api/books/${bookId}/highlights`, h),
-  updateHighlight: (id: string, p: { color?: string; comment?: string }) => req<Highlight>("PATCH", `/api/highlights/${id}`, p),
-  deleteHighlight: (id: string) => req("DELETE", `/api/highlights/${id}`),
+  memos: (bookId: string) => req<Memo[]>("GET", `/api/books/${bookId}/memos`),
+  createMemo: (bookId: string, m: Pick<Memo, "locator" | "label" | "text"> & Partial<Pick<Memo, "kind" | "color" | "body" | "sort">>) =>
+    req<Memo>("POST", `/api/books/${bookId}/memos`, m),
+  updateMemo: (id: string, p: { color?: string; body?: string }) => req<Memo>("PATCH", `/api/memos/${id}`, p),
+  deleteMemo: (id: string) => req("DELETE", `/api/memos/${id}`),
 
-  notes: (o: { bookId?: string; q?: string } = {}) => req<Note[]>("GET", `/api/notes${qs(o)}`),
+  notes: (o: { q?: string } = {}) => req<Note[]>("GET", `/api/notes${qs(o)}`),
   note: (id: string) => req<Note>("GET", `/api/notes/${id}`),
-  createNote: (n: { bookId?: string | null; title: string; body: string }) => req<Note>("POST", "/api/notes", n),
+  /** The note of a book (created on first use). */
+  bookNote: (bookId: string) => req<Note>("GET", `/api/books/${bookId}/note`),
+  /** Creates a free-standing note. */
+  createNote: (n: { title: string; body: string }) => req<Note>("POST", "/api/notes", n),
   updateNote: (id: string, p: { title?: string; body?: string }) => req<Note>("PATCH", `/api/notes/${id}`, p),
   deleteNote: (id: string) => req("DELETE", `/api/notes/${id}`),
 
   conversations: (bookId: string) => req<Conversation[]>("GET", `/api/books/${bookId}/conversations`),
   conversation: (id: string) => req<Conversation>("GET", `/api/conversations/${id}`),
-  createConversation: (bookId: string, c: { passage: string; context: string; locator: Locator | null }) =>
+  createConversation: (bookId: string, c: { passage: string; context: string; locator: Locator | null; memoId?: string }) =>
     req<Conversation>("POST", `/api/books/${bookId}/conversations`, c),
   renameConversation: (id: string, title: string) => req("PATCH", `/api/conversations/${id}`, { title }),
   deleteConversation: (id: string) => req("DELETE", `/api/conversations/${id}`),
-  exportConversation: (id: string, o: { noteId?: string; messageIds?: string[] } = {}) =>
-    req<Note>("POST", `/api/conversations/${id}/export`, o),
-  summarizeConversation: (id: string, o: { noteId?: string } = {}) => req<Note>("POST", `/api/conversations/${id}/summarize`, o),
+  /** Appends the conversation (or some of its messages) to its memo, or to the book's note. */
+  exportConversation: (id: string, o: { messageIds?: string[] } = {}) => req<Saved>("POST", `/api/conversations/${id}/export`, o),
+  summarizeConversation: (id: string) => req<Saved>("POST", `/api/conversations/${id}/summarize`, {}),
 };
 
 export type ChatEvent =
@@ -274,7 +296,12 @@ export function uploadBook(file: File, tagIds: number[], onProgress?: (p: number
   });
 }
 
-/** Link that opens a book at the given position. */
-export function readerUrl(bookId: string, locator?: Locator | null) {
-  return locator ? `/read/${bookId}?at=${encodeURIComponent(JSON.stringify(locator))}` : `/read/${bookId}`;
+/** Link that opens a book, optionally at a position, showing a memo or an AI conversation. */
+export function readerUrl(bookId: string, o: { at?: Locator | null; memo?: string; conv?: string } = {}) {
+  const p = new URLSearchParams();
+  if (o.at) p.set("at", JSON.stringify(o.at));
+  if (o.memo) p.set("memo", o.memo);
+  if (o.conv) p.set("conv", o.conv);
+  const q = p.toString();
+  return `/read/${bookId}${q ? `?${q}` : ""}`;
 }

@@ -65,17 +65,20 @@ var migrations = []string{
 		percent REAL NOT NULL DEFAULT 0,
 		updated_at INTEGER NOT NULL
 	);
-	CREATE TABLE highlights (
+	CREATE TABLE memos (
 		id TEXT PRIMARY KEY,
 		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+		kind TEXT NOT NULL DEFAULT 'highlight',
 		locator TEXT NOT NULL,
+		label TEXT NOT NULL DEFAULT '',
 		text TEXT NOT NULL,
 		color TEXT NOT NULL DEFAULT 'yellow',
-		comment TEXT NOT NULL DEFAULT '',
+		body TEXT NOT NULL DEFAULT '',
+		sort REAL NOT NULL DEFAULT 0,
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL
 	);
-	CREATE INDEX highlights_book ON highlights(book_id);
+	CREATE INDEX memos_book ON memos(book_id);
 	CREATE TABLE notes (
 		id TEXT PRIMARY KEY,
 		book_id TEXT REFERENCES books(id) ON DELETE SET NULL,
@@ -84,7 +87,7 @@ var migrations = []string{
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL
 	);
-	CREATE INDEX notes_book ON notes(book_id);
+	CREATE UNIQUE INDEX notes_one_per_book ON notes(book_id) WHERE book_id IS NOT NULL;
 	CREATE TABLE conversations (
 		id TEXT PRIMARY KEY,
 		book_id TEXT NOT NULL REFERENCES books(id) ON DELETE CASCADE,
@@ -92,6 +95,7 @@ var migrations = []string{
 		passage TEXT NOT NULL DEFAULT '',
 		context TEXT NOT NULL DEFAULT '',
 		locator TEXT NOT NULL DEFAULT '',
+		memo_id TEXT REFERENCES memos(id) ON DELETE SET NULL,
 		created_at INTEGER NOT NULL,
 		updated_at INTEGER NOT NULL
 	);

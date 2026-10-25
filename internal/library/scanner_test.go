@@ -81,13 +81,15 @@ func TestRemoveMissing(t *testing.T) {
 		t.Fatal(err)
 	}
 	os.WriteFile(lib.CoverPath(gone.ID), []byte("cover"), 0o644)
-	if err := lib.Store.CreateHighlight(&db.Highlight{BookID: gone.ID, Locator: []byte(`{"type":"pdf","page":1}`), Text: "x"}); err != nil {
+	if err := lib.Store.CreateMemo(&db.Memo{BookID: gone.ID, Locator: []byte(`{"type":"pdf","page":1}`), Label: "p.1", Text: "quoted", Body: "my thoughts"}); err != nil {
 		t.Fatal(err)
 	}
-	note := &db.Note{BookID: &gone.ID, Title: "memo", Body: "keep me"}
-	if err := lib.Store.CreateNote(note); err != nil {
+	note, err := lib.Store.BookNote(gone.ID)
+	if err != nil {
 		t.Fatal(err)
 	}
+	intro := "keep me"
+	lib.Store.UpdateNote(note.ID, nil, &intro)
 
 	if err := lib.RemoveMissing(keep.ID); !errors.Is(err, ErrNotMissing) {
 		t.Errorf("removing a present book: expected ErrNotMissing, got %v", err)
@@ -103,11 +105,15 @@ func TestRemoveMissing(t *testing.T) {
 	if _, err := lib.Store.GetBook(gone.ID); !errors.Is(err, db.ErrNotFound) {
 		t.Errorf("book still present: %v", err)
 	}
-	if hs, _ := lib.Store.ListHighlights(gone.ID); len(hs) != 0 {
-		t.Errorf("highlights not deleted: %v", hs)
+	if ms, _ := lib.Store.ListMemos(gone.ID); len(ms) != 0 {
+		t.Errorf("memos not deleted: %v", ms)
 	}
-	if n, err := lib.Store.GetNote(note.ID); err != nil || n.BookID != nil || n.Body != "keep me" {
-		t.Errorf("note should be kept and detached: %+v %v", n, err)
+	n, err := lib.Store.GetNote(note.ID)
+	if err != nil || n.BookID != nil || n.Title != gone.Title {
+		t.Fatalf("note should be kept, detached and titled after the book: %+v %v", n, err)
+	}
+	if want := "keep me\n\n> quoted\n>\n> — p.1\n\nmy thoughts"; n.Body != want {
+		t.Errorf("memos should be written into the kept note:\n%q\nwant\n%q", n.Body, want)
 	}
 	if _, err := os.Stat(lib.CoverPath(gone.ID)); !errors.Is(err, os.ErrNotExist) {
 		t.Errorf("cached cover not removed: %v", err)

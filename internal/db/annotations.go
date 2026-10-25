@@ -4,101 +4,160 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
-// ---- highlights ----
+// ---- memos ----
 
-type Highlight struct {
-	ID        string          `json:"id"`
-	BookID    string          `json:"bookId"`
-	Locator   json.RawMessage `json:"locator"`
-	Text      string          `json:"text"`
-	Color     string          `json:"color"`
-	Comment   string          `json:"comment"`
-	CreatedAt int64           `json:"createdAt"`
-	UpdatedAt int64           `json:"updatedAt"`
+// Memo kinds. A highlight memo marks a passage in the book (its body may be
+// empty); a text memo is free text placed among the memos in the book's note,
+// ordered by a locator copied from the memo it follows.
+const (
+	MemoHighlight = "highlight"
+	MemoText      = "text"
+)
+
+type Memo struct {
+	ID      string          `json:"id"`
+	BookID  string          `json:"bookId"`
+	Kind    string          `json:"kind"`
+	Locator json.RawMessage `json:"locator"`
+	// Label is a human-readable position, e.g. "第三章・42%" or "p.12".
+	Label string `json:"label"`
+	Text  string `json:"text"` // the quoted passage
+	Color string `json:"color"`
+	Body  string `json:"body"` // Markdown
+	// Sort orders memos that share a position (text memos after the memo they follow).
+	Sort      float64 `json:"sort"`
+	CreatedAt int64   `json:"createdAt"`
+	UpdatedAt int64   `json:"updatedAt"`
 }
 
-func (s *Store) ListHighlights(bookID string) ([]Highlight, error) {
-	rows, err := s.DB.Query(`SELECT id, book_id, locator, text, color, comment, created_at, updated_at FROM highlights WHERE book_id = ? ORDER BY created_at`, bookID)
+const memoCols = `id, book_id, kind, locator, label, text, color, body, sort, created_at, updated_at`
+
+func scanMemo(r scanner) (*Memo, error) {
+	var m Memo
+	var loc string
+	if err := r.Scan(&m.ID, &m.BookID, &m.Kind, &loc, &m.Label, &m.Text, &m.Color, &m.Body, &m.Sort, &m.CreatedAt, &m.UpdatedAt); err != nil {
+		return nil, err
+	}
+	m.Locator = json.RawMessage(loc)
+	return &m, nil
+}
+
+func (s *Store) ListMemos(bookID string) ([]*Memo, error) {
+	rows, err := s.DB.Query(`SELECT `+memoCols+` FROM memos WHERE book_id = ? ORDER BY sort`, bookID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []Highlight{}
+	out := []*Memo{}
 	for rows.Next() {
-		var h Highlight
-		var loc string
-		if err := rows.Scan(&h.ID, &h.BookID, &loc, &h.Text, &h.Color, &h.Comment, &h.CreatedAt, &h.UpdatedAt); err != nil {
+		m, err := scanMemo(rows)
+		if err != nil {
 			return nil, err
 		}
-		h.Locator = json.RawMessage(loc)
-		out = append(out, h)
+		out = append(out, m)
 	}
 	return out, rows.Err()
 }
 
-func (s *Store) CreateHighlight(h *Highlight) error {
-	h.ID = NewID()
-	h.CreatedAt = Now()
-	h.UpdatedAt = h.CreatedAt
-	if h.Color == "" {
-		h.Color = "yellow"
-	}
-	_, err := s.DB.Exec(`INSERT INTO highlights (id, book_id, locator, text, color, comment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		h.ID, h.BookID, string(h.Locator), h.Text, h.Color, h.Comment, h.CreatedAt, h.UpdatedAt)
-	return err
-}
-
-func (s *Store) GetHighlight(id string) (*Highlight, error) {
-	var h Highlight
-	var loc string
-	err := s.DB.QueryRow(`SELECT id, book_id, locator, text, color, comment, created_at, updated_at FROM highlights WHERE id = ?`, id).
-		Scan(&h.ID, &h.BookID, &loc, &h.Text, &h.Color, &h.Comment, &h.CreatedAt, &h.UpdatedAt)
+func (s *Store) GetMemo(id string) (*Memo, error) {
+	m, err := scanMemo(s.DB.QueryRow(`SELECT `+memoCols+` FROM memos WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
-	h.Locator = json.RawMessage(loc)
-	return &h, err
+	return m, err
 }
 
-func (s *Store) UpdateHighlight(id string, color, comment *string) error {
-	if color != nil {
-		if _, err := s.DB.Exec(`UPDATE highlights SET color = ?, updated_at = ? WHERE id = ?`, *color, Now(), id); err != nil {
-			return err
-		}
+func (s *Store) CreateMemo(m *Memo) error {
+	m.ID = NewID()
+	m.CreatedAt = Now()
+	m.UpdatedAt = m.CreatedAt
+	if m.Kind != MemoText {
+		m.Kind = MemoHighlight
 	}
-	if comment != nil {
-		if _, err := s.DB.Exec(`UPDATE highlights SET comment = ?, updated_at = ? WHERE id = ?`, *comment, Now(), id); err != nil {
-			return err
-		}
+	if m.Color == "" {
+		m.Color = "yellow"
 	}
-	return nil
+	if m.Sort == 0 {
+		m.Sort = float64(m.CreatedAt)
+	}
+	if _, err := s.DB.Exec(`INSERT INTO memos (`+memoCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		m.ID, m.BookID, m.Kind, string(m.Locator), m.Label, m.Text, m.Color, m.Body, m.Sort, m.CreatedAt, m.UpdatedAt); err != nil {
+		return err
+	}
+	return s.touchBookNote(m.BookID)
 }
 
-func (s *Store) DeleteHighlight(id string) error {
-	_, err := s.DB.Exec(`DELETE FROM highlights WHERE id = ?`, id)
-	return err
+type MemoUpdate struct {
+	Color, Body *string
+}
+
+func (s *Store) UpdateMemo(id string, u MemoUpdate) error {
+	m, err := s.GetMemo(id)
+	if err != nil {
+		return err
+	}
+	if u.Color != nil {
+		m.Color = *u.Color
+	}
+	if u.Body != nil {
+		m.Body = *u.Body
+	}
+	if _, err := s.DB.Exec(`UPDATE memos SET color = ?, body = ?, updated_at = ? WHERE id = ?`, m.Color, m.Body, Now(), id); err != nil {
+		return err
+	}
+	return s.touchBookNote(m.BookID)
+}
+
+// AppendToMemo adds Markdown to the end of a memo's body.
+func (s *Store) AppendToMemo(id, md string) error {
+	m, err := s.GetMemo(id)
+	if err != nil {
+		return err
+	}
+	body := strings.TrimRight(m.Body, "\n")
+	if body != "" {
+		body += "\n\n"
+	}
+	body += md
+	return s.UpdateMemo(id, MemoUpdate{Body: &body})
+}
+
+func (s *Store) DeleteMemo(id string) error {
+	m, err := s.GetMemo(id)
+	if err != nil {
+		return err
+	}
+	if _, err := s.DB.Exec(`DELETE FROM memos WHERE id = ?`, id); err != nil {
+		return err
+	}
+	return s.touchBookNote(m.BookID)
 }
 
 // ---- notes ----
 
+// A note is either the note of a book (one per book: a Markdown introduction
+// shown above the book's memos) or a free-standing Markdown document.
 type Note struct {
 	ID        string  `json:"id"`
 	BookID    *string `json:"bookId"`
 	BookTitle string  `json:"bookTitle,omitempty"`
 	Title     string  `json:"title"`
 	Body      string  `json:"body"`
+	MemoCount int     `json:"memoCount"`
 	CreatedAt int64   `json:"createdAt"`
 	UpdatedAt int64   `json:"updatedAt"`
 }
 
-const noteCols = `n.id, n.book_id, COALESCE(b.title, ''), n.title, n.body, n.created_at, n.updated_at`
+const noteCols = `n.id, n.book_id, COALESCE(b.title, ''), n.title, n.body,
+	(SELECT COUNT(*) FROM memos m WHERE m.book_id = n.book_id), n.created_at, n.updated_at`
 
 func scanNote(r scanner) (*Note, error) {
 	var n Note
 	var bid sql.NullString
-	if err := r.Scan(&n.ID, &bid, &n.BookTitle, &n.Title, &n.Body, &n.CreatedAt, &n.UpdatedAt); err != nil {
+	if err := r.Scan(&n.ID, &bid, &n.BookTitle, &n.Title, &n.Body, &n.MemoCount, &n.CreatedAt, &n.UpdatedAt); err != nil {
 		return nil, err
 	}
 	if bid.Valid {
@@ -107,16 +166,21 @@ func scanNote(r scanner) (*Note, error) {
 	return &n, nil
 }
 
+// ListNotes lists free notes and the notes of books that have something in
+// them. q matches note titles and bodies, and the memos of a book's note.
 func (s *Store) ListNotes(bookID, q string) ([]*Note, error) {
-	sqlStr := `SELECT ` + noteCols + ` FROM notes n LEFT JOIN books b ON b.id = n.book_id WHERE 1=1`
+	sqlStr := `SELECT ` + noteCols + ` FROM notes n LEFT JOIN books b ON b.id = n.book_id
+		WHERE (n.book_id IS NULL OR n.body != '' OR EXISTS (SELECT 1 FROM memos m WHERE m.book_id = n.book_id))`
 	var args []any
 	if bookID != "" {
 		sqlStr += ` AND n.book_id = ?`
 		args = append(args, bookID)
 	}
 	if q != "" {
-		sqlStr += ` AND (n.title LIKE ? OR n.body LIKE ?)`
-		args = append(args, "%"+q+"%", "%"+q+"%")
+		like := "%" + q + "%"
+		sqlStr += ` AND (n.title LIKE ? OR n.body LIKE ? OR b.title LIKE ? OR EXISTS
+			(SELECT 1 FROM memos m WHERE m.book_id = n.book_id AND (m.body LIKE ? OR m.text LIKE ?)))`
+		args = append(args, like, like, like, like, like)
 	}
 	sqlStr += ` ORDER BY n.updated_at DESC`
 	rows, err := s.DB.Query(sqlStr, args...)
@@ -143,12 +207,43 @@ func (s *Store) GetNote(id string) (*Note, error) {
 	return n, err
 }
 
+// BookNote returns the note of a book, creating an empty one if needed.
+func (s *Store) BookNote(bookID string) (*Note, error) {
+	if err := s.ensureBookNote(bookID); err != nil {
+		return nil, err
+	}
+	n, err := scanNote(s.DB.QueryRow(`SELECT `+noteCols+` FROM notes n LEFT JOIN books b ON b.id = n.book_id WHERE n.book_id = ?`, bookID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	}
+	return n, err
+}
+
+func (s *Store) ensureBookNote(bookID string) error {
+	now := Now()
+	_, err := s.DB.Exec(`INSERT INTO notes (id, book_id, title, body, created_at, updated_at)
+		SELECT ?, id, '', '', ?, ? FROM books WHERE id = ? AND NOT EXISTS (SELECT 1 FROM notes WHERE book_id = ?)`,
+		NewID(), now, now, bookID, bookID)
+	return err
+}
+
+// touchBookNote marks a book's note as updated when its memos change.
+func (s *Store) touchBookNote(bookID string) error {
+	if err := s.ensureBookNote(bookID); err != nil {
+		return err
+	}
+	_, err := s.DB.Exec(`UPDATE notes SET updated_at = ? WHERE book_id = ?`, Now(), bookID)
+	return err
+}
+
+// CreateNote creates a free-standing note (book notes come from BookNote).
 func (s *Store) CreateNote(n *Note) error {
 	n.ID = NewID()
+	n.BookID = nil
 	n.CreatedAt = Now()
 	n.UpdatedAt = n.CreatedAt
-	_, err := s.DB.Exec(`INSERT INTO notes (id, book_id, title, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`,
-		n.ID, n.BookID, n.Title, n.Body, n.CreatedAt, n.UpdatedAt)
+	_, err := s.DB.Exec(`INSERT INTO notes (id, book_id, title, body, created_at, updated_at) VALUES (?, NULL, ?, ?, ?, ?)`,
+		n.ID, n.Title, n.Body, n.CreatedAt, n.UpdatedAt)
 	return err
 }
 
@@ -166,8 +261,18 @@ func (s *Store) UpdateNote(id string, title, body *string) error {
 	return nil
 }
 
+// ErrBookNote is returned when deleting the note of a book.
+var ErrBookNote = errors.New("the note of a book cannot be deleted")
+
 func (s *Store) DeleteNote(id string) error {
-	_, err := s.DB.Exec(`DELETE FROM notes WHERE id = ?`, id)
+	n, err := s.GetNote(id)
+	if err != nil {
+		return err
+	}
+	if n.BookID != nil {
+		return ErrBookNote
+	}
+	_, err = s.DB.Exec(`DELETE FROM notes WHERE id = ?`, id)
 	return err
 }
 
@@ -180,6 +285,7 @@ type Conversation struct {
 	Passage   string          `json:"passage"`
 	Context   string          `json:"context,omitempty"`
 	Locator   json.RawMessage `json:"locator"`
+	MemoID    *string         `json:"memoId"` // the memo the conversation belongs to
 	CreatedAt int64           `json:"createdAt"`
 	UpdatedAt int64           `json:"updatedAt"`
 	Messages  []Message       `json:"messages,omitempty"`
@@ -196,8 +302,12 @@ type Message struct {
 func scanConv(r scanner) (*Conversation, error) {
 	var c Conversation
 	var loc string
-	if err := r.Scan(&c.ID, &c.BookID, &c.Title, &c.Passage, &c.Context, &loc, &c.CreatedAt, &c.UpdatedAt); err != nil {
+	var memo sql.NullString
+	if err := r.Scan(&c.ID, &c.BookID, &c.Title, &c.Passage, &c.Context, &loc, &memo, &c.CreatedAt, &c.UpdatedAt); err != nil {
 		return nil, err
+	}
+	if memo.Valid {
+		c.MemoID = &memo.String
 	}
 	if loc == "" {
 		loc = "null"
@@ -206,7 +316,7 @@ func scanConv(r scanner) (*Conversation, error) {
 	return &c, nil
 }
 
-const convCols = `id, book_id, title, passage, context, locator, created_at, updated_at`
+const convCols = `id, book_id, title, passage, context, locator, memo_id, created_at, updated_at`
 
 func (s *Store) ListConversations(bookID string) ([]*Conversation, error) {
 	rows, err := s.DB.Query(`SELECT `+convCols+` FROM conversations WHERE book_id = ? ORDER BY updated_at DESC`, bookID)
@@ -257,8 +367,8 @@ func (s *Store) CreateConversation(c *Conversation) error {
 	if len(c.Locator) == 0 {
 		c.Locator = json.RawMessage("null")
 	}
-	_, err := s.DB.Exec(`INSERT INTO conversations (`+convCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		c.ID, c.BookID, c.Title, c.Passage, c.Context, string(c.Locator), c.CreatedAt, c.UpdatedAt)
+	_, err := s.DB.Exec(`INSERT INTO conversations (`+convCols+`) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		c.ID, c.BookID, c.Title, c.Passage, c.Context, string(c.Locator), c.MemoID, c.CreatedAt, c.UpdatedAt)
 	return err
 }
 

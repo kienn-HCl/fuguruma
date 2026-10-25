@@ -205,10 +205,18 @@ func (s *Store) UpdateBookFile(id, path, fingerprint string, size, mtime int64) 
 	return err
 }
 
-// DeleteBook removes a book record. Its highlights, AI conversations, reading
-// progress and tag assignments are deleted with it (ON DELETE CASCADE); notes
-// are kept and only detached from the book (ON DELETE SET NULL).
+// DeleteBook removes a book record. Its memos, AI conversations, reading
+// progress and tag assignments are deleted with it (ON DELETE CASCADE). The
+// book's note is kept as a free-standing note, titled after the book, with
+// the memos written into its body.
 func (s *Store) DeleteBook(id string) error {
+	b, err := s.GetBook(id)
+	if err != nil {
+		return err
+	}
+	if err := s.keepBookNote(b); err != nil {
+		return err
+	}
 	res, err := s.DB.Exec(`DELETE FROM books WHERE id = ?`, id)
 	if err != nil {
 		return err
@@ -217,6 +225,60 @@ func (s *Store) DeleteBook(id string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+func (s *Store) keepBookNote(b *Book) error {
+	memos, err := s.ListMemos(b.ID)
+	if err != nil {
+		return err
+	}
+	var n struct {
+		id, title, body string
+	}
+	err = s.DB.QueryRow(`SELECT id, title, body FROM notes WHERE book_id = ?`, b.ID).Scan(&n.id, &n.title, &n.body)
+	if errors.Is(err, sql.ErrNoRows) {
+		if len(memos) == 0 {
+			return nil
+		}
+		n.id = NewID()
+		if _, err := s.DB.Exec(`INSERT INTO notes (id, book_id, title, body, created_at, updated_at) VALUES (?, ?, '', '', ?, ?)`, n.id, b.ID, Now(), Now()); err != nil {
+			return err
+		}
+	} else if err != nil {
+		return err
+	}
+	if n.title == "" {
+		n.title = b.Title
+	}
+	parts := []string{}
+	if strings.TrimSpace(n.body) != "" {
+		parts = append(parts, strings.TrimSpace(n.body))
+	}
+	for _, m := range memos {
+		parts = append(parts, MemoMarkdown(m))
+	}
+	_, err = s.DB.Exec(`UPDATE notes SET title = ?, body = ?, updated_at = ? WHERE id = ?`, n.title, strings.Join(parts, "\n\n"), Now(), n.id)
+	return err
+}
+
+// MemoMarkdown renders a memo as Markdown (a quote with its position, then the body).
+func MemoMarkdown(m *Memo) string {
+	var sb strings.Builder
+	if m.Kind == MemoHighlight && m.Text != "" {
+		for _, l := range strings.Split(strings.TrimSpace(m.Text), "\n") {
+			sb.WriteString("> " + l + "\n")
+		}
+		if m.Label != "" {
+			sb.WriteString(">\n> — " + m.Label + "\n")
+		}
+	}
+	if b := strings.TrimSpace(m.Body); b != "" {
+		if sb.Len() > 0 {
+			sb.WriteString("\n")
+		}
+		sb.WriteString(b + "\n")
+	}
+	return strings.TrimSpace(sb.String())
 }
 
 func (s *Store) SetMissing(id string, missing bool) error {

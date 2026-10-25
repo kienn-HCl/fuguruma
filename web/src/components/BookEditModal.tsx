@@ -50,7 +50,7 @@ export default function BookEditModal({
   const remove = async () => {
     const ok = confirm(
       `「${book.title}」を本棚から削除しますか？\n\n` +
-        "ハイライト・AI との会話・読書位置・タグ付けは削除されます。\nノートは削除されず、本に紐づかないノートとして残ります。\n\n" +
+        "メモ・AI との会話・読書位置・タグ付けは削除されます。\nこの本のノートは、メモを書き写したうえで本に紐づかないノートとして残ります。\n\n" +
         "あとで同じファイルを置いても、新しい本として登録されます。",
     );
     if (!ok) return;
