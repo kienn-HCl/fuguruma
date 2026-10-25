@@ -205,6 +205,20 @@ func (s *Store) UpdateBookFile(id, path, fingerprint string, size, mtime int64) 
 	return err
 }
 
+// DeleteBook removes a book record. Its highlights, AI conversations, reading
+// progress and tag assignments are deleted with it (ON DELETE CASCADE); notes
+// are kept and only detached from the book (ON DELETE SET NULL).
+func (s *Store) DeleteBook(id string) error {
+	res, err := s.DB.Exec(`DELETE FROM books WHERE id = ?`, id)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (s *Store) SetMissing(id string, missing bool) error {
 	_, err := s.DB.Exec(`UPDATE books SET missing = ? WHERE id = ?`, boolInt(missing), id)
 	return err

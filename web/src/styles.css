@@ -329,3 +329,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .upload-list { list-style: none; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; max-height: 40vh; overflow: auto; }
 .upload-list li { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
 .upload-list .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+
+.notice {
+  margin: 0 16px 8px; padding: 10px 12px; border-radius: 8px; font-size: 13px;
+  background: color-mix(in srgb, #e6a23c 16%, var(--surface)); border: 1px solid var(--border);
+}
+.danger-zone { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }

@@ -59,7 +59,10 @@
   - 起動時 + `library.scan_interval`（既定 30 分）ごと + UI の「再スキャン」ボタン。
   - 隠しディレクトリと、ストレージ製品が作るメタデータディレクトリ（`@eaDir`, `#recycle` など `@`/`#` 始まり）は除外。
 - **書籍の同一性**：ファイル先頭 1MB とサイズから作る `fingerprint` を保持。ディレクトリ内でファイルを移動・リネームしても、同じ fingerprint の新パスに自動で付け替え、メモや進捗を失わない。
-- ファイルが消えた本は `missing` 扱いにし、データは残す（UI ではグレー表示）。
+- ファイルが消えた本は `missing` 扱いにし、データ（ハイライト・ノート・会話・進捗・タグ）は残す。同じ内容のファイルが再び現れれば付け直す（場所・名前は問わない）。
+  - 本棚では missing の本を既定で表示せず、「見つからない本」チップで一覧する。
+  - missing の本に限り、「本棚から削除」で DB の記録を消せる。ハイライト・AI 会話・進捗・タグ付けは削除し、ノートは本に紐づかないノートとして残す。キャッシュした表紙も消す。**本のファイルは削除しない**（ファイルが存在する本は削除できない）。
+- スキャンの安全装置：本のディレクトリが存在しない・読めない場合、または本が 1 冊も見つからないのに登録済みの本がある場合（マウントが外れて空のマウントポイントだけ見えている状態）は、スキャンを中止して本の状態を変えない。読めなかったサブディレクトリ配下の本も missing にしない。
 - メタデータ
   - EPUB：OPF からタイトル・著者・説明・表紙画像を抽出。
   - PDF：ファイル名をタイトルに。表紙は**クライアントで 1 ページ目を描画して** サーバーにアップロード（Go 側に PDF レンダラを持たないため）。
@@ -231,11 +234,12 @@ messages(id TEXT PK, conversation_id, role /*user|assistant*/, content, created_
 | POST | `/api/login` / `/api/logout` | `{password}` |
 | GET | `/api/books?q=&tag=&sort=` | 本一覧（タグ・進捗付き） |
 | GET / PATCH | `/api/books/{id}` | 詳細 / タイトル・著者編集 |
+| DELETE | `/api/books/{id}` | missing の本を本棚から削除（ファイルが存在する本は 409）。本のファイルは削除しない |
 | GET | `/api/books/{id}/file` | 本ファイル（Range 対応） |
 | GET / PUT | `/api/books/{id}/cover` | 表紙取得 / アップロード（PDF 用） |
 | PUT | `/api/books/{id}/tags` | `{tagIds:[...]}` タグ付け替え |
 | GET / PUT | `/api/books/{id}/progress` | 読書位置 |
-| POST | `/api/library/scan` | 再スキャン |
+| POST | `/api/library/scan` | 再スキャン（本のディレクトリが読めない・空のときは 503 で中止し、本の状態を変えない） |
 | POST | `/api/library/upload` | 本のアップロード（multipart：`tagIds` → `file` の順）。201 で本を返す。409 重複（`bookId` 付き）/ 413 サイズ超過 / 415 非対応形式 / 403 無効 |
 | GET / POST | `/api/tags` | 一覧 / 作成 |
 | PATCH / DELETE | `/api/tags/{id}` | 編集 / 削除 |

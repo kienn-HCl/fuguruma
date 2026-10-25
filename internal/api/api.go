@@ -44,6 +44,7 @@ func (s *Server) Handler() http.Handler {
 	m.HandleFunc("GET /api/books", s.listBooks)
 	m.HandleFunc("GET /api/books/{id}", s.getBook)
 	m.HandleFunc("PATCH /api/books/{id}", s.patchBook)
+	m.HandleFunc("DELETE /api/books/{id}", s.deleteBook)
 	m.HandleFunc("GET /api/books/{id}/file", s.bookFile)
 	m.HandleFunc("GET /api/books/{id}/cover", s.getCover)
 	m.HandleFunc("PUT /api/books/{id}/cover", s.putCover)
@@ -351,11 +352,31 @@ func (s *Server) putProgress(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) scan(w http.ResponseWriter, r *http.Request) {
 	res, err := s.Lib.Scan()
+	if errors.Is(err, library.ErrLibraryUnavailable) {
+		log.Printf("scan: %v", err)
+		writeErr(w, http.StatusServiceUnavailable, "本のディレクトリを読めないか空のため、スキャンを中止しました（マウントが外れていませんか？）。本の状態は変更していません")
+		return
+	}
 	if err != nil {
 		handleErr(w, err)
 		return
 	}
 	writeJSON(w, res)
+}
+
+// deleteBook removes a book whose file has gone missing from the library.
+// Files in the books directory are never deleted.
+func (s *Server) deleteBook(w http.ResponseWriter, r *http.Request) {
+	err := s.Lib.RemoveMissing(r.PathValue("id"))
+	if errors.Is(err, library.ErrNotMissing) {
+		writeErr(w, http.StatusConflict, "ファイルが存在する本は削除できません（Fuguruma は本のファイルを削除しません）")
+		return
+	}
+	if err != nil {
+		handleErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]bool{"ok": true})
 }
 
 // ---- tags ----

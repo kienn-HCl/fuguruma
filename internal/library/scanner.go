@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"log"
@@ -53,9 +55,20 @@ func (l *Library) AbsPath(rel string) (string, bool) {
 	return p, true
 }
 
+// ErrLibraryUnavailable means the books directory could not be read or looks
+// unmounted. Scan then leaves every book as it was instead of marking them
+// all missing.
+var ErrLibraryUnavailable = errors.New("books directory is unavailable")
+
 func (l *Library) Scan() (*ScanResult, error) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+
+	if st, err := os.Stat(l.Root); err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrLibraryUnavailable, err)
+	} else if !st.IsDir() {
+		return nil, fmt.Errorf("%w: %s is not a directory", ErrLibraryUnavailable, l.Root)
+	}
 
 	existing, err := l.Store.AllBookFiles()
 	if err != nil {
@@ -75,10 +88,17 @@ func (l *Library) Scan() (*ScanResult, error) {
 		info             fs.FileInfo
 	}
 	var newFiles []found
+	var unreadable []string // directories (relative, slash-separated) that could not be listed
 
 	err = filepath.WalkDir(l.Root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if p == l.Root {
+				return fmt.Errorf("%w: %v", ErrLibraryUnavailable, err)
+			}
 			log.Printf("scan: %s: %v", p, err)
+			if rel, rerr := filepath.Rel(l.Root, p); rerr == nil {
+				unreadable = append(unreadable, filepath.ToSlash(rel)+"/")
+			}
 			return nil
 		}
 		name := d.Name()
@@ -150,13 +170,38 @@ func (l *Library) Scan() (*ScanResult, error) {
 		res.Added++
 	}
 
+	var gone []*db.Book
+	present := 0
 	for _, b := range existing {
-		if !seen[b.ID] && !b.Missing {
-			l.Store.SetMissing(b.ID, true)
-			res.Missing++
+		if b.Missing {
+			continue
+		}
+		present++
+		if !seen[b.ID] && !underAny(b.Path, unreadable) {
+			gone = append(gone, b)
 		}
 	}
+	// An empty directory where books used to be is almost always an unmounted
+	// network share or drive (the mount point exists but is empty), not a
+	// library whose every book was deleted.
+	if res.Total == 0 && present > 0 {
+		return nil, fmt.Errorf("%w: no books found in %s (not mounted?)", ErrLibraryUnavailable, l.Root)
+	}
+	for _, b := range gone {
+		l.Store.SetMissing(b.ID, true)
+		res.Missing++
+	}
 	return res, nil
+}
+
+// underAny reports whether rel lies inside one of the directory prefixes.
+func underAny(rel string, dirs []string) bool {
+	for _, d := range dirs {
+		if strings.HasPrefix(rel, d) {
+			return true
+		}
+	}
+	return false
 }
 
 // addBook registers a file that is not in the database yet, reading EPUB

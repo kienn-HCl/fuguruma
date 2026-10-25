@@ -162,6 +162,10 @@ func TestImportReattachesMissingBook(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Another book keeps the library non-empty, so Scan does not treat it as unmounted.
+	if _, err := lib.Import("other.pdf", bytes.NewReader(pdfBytes("other")), "", 1<<20); err != nil {
+		t.Fatal(err)
+	}
 	os.Remove(filepath.Join(lib.Root, "orig.pdf"))
 	if _, err := lib.Scan(); err != nil {
 		t.Fatal(err)

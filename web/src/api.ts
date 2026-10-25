@@ -154,6 +154,8 @@ export const api = {
   books: (o: { q?: string; tag?: number; sort?: string } = {}) => req<Book[]>("GET", `/api/books${qs(o)}`),
   book: (id: string) => req<Book>("GET", `/api/books/${id}`),
   updateBook: (id: string, p: { title?: string; author?: string }) => req<Book>("PATCH", `/api/books/${id}`, p),
+  /** Removes a book whose file is missing from the library (the file itself is never touched). */
+  deleteBook: (id: string) => req("DELETE", `/api/books/${id}`),
   setBookTags: (id: string, tagIds: number[]) => req<Book>("PUT", `/api/books/${id}/tags`, { tagIds }),
   fileUrl: (id: string) => `/api/books/${id}/file`,
   coverUrl: (b: Pick<Book, "id" | "updatedAt">) => `/api/books/${b.id}/cover?v=${b.updatedAt}`,

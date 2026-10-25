@@ -15,6 +15,8 @@ export default function Library() {
   const [params, setParams] = useSearchParams();
   const tag = Number(params.get("tag") || 0);
   const sort = params.get("sort") || "recent";
+  // Books whose file has gone missing are hidden unless this filter is on.
+  const showMissing = params.get("missing") === "1";
   const [q, setQ] = useState(params.get("q") || "");
   const [books, setBooks] = useState<Book[] | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -47,6 +49,9 @@ export default function Library() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [q]);
+
+  const missingCount = books?.filter((b) => b.missing).length ?? 0;
+  const shown = books && books.filter((b) => b.missing === showMissing);
 
   usePdfCovers(books, (id) => setBooks((bs) => bs && bs.map((b) => (b.id === id ? { ...b, hasCover: true, updatedAt: Date.now() } : b))));
 
@@ -91,10 +96,24 @@ export default function Library() {
             <span className="muted">{t.count}</span>
           </button>
         ))}
+        {(missingCount > 0 || showMissing) && (
+          <button className={`chip ${showMissing ? "active" : ""}`} onClick={() => setParam("missing", showMissing ? "" : "1")} title="ファイルが見つからない本">
+            見つからない本
+            <span className="muted">{missingCount}</span>
+          </button>
+        )}
         <button className="chip" onClick={() => setManagingTags(true)}>＋ タグ管理</button>
       </nav>
 
-      {books === null ? null : books.length === 0 ? (
+      {showMissing && (
+        <p className="notice">
+          ファイルが見つからない本です。メモやハイライトは残っています。ファイルを本のディレクトリに戻す（場所や名前は変わっていても構いません）か、同じファイルをアップロードし直すと元に戻ります。不要な本は「⋯」から本棚から削除できます。
+        </p>
+      )}
+
+      {shown === null ? null : shown.length === 0 && showMissing ? (
+        <div className="empty">ファイルが見つからない本はありません。</div>
+      ) : shown.length === 0 ? (
         <div className="empty">
           本が見つかりません。<br />
           <span className="small">本のディレクトリに .epub / .pdf を置いて「⟳」で再スキャンしてください。</span>
@@ -106,7 +125,7 @@ export default function Library() {
         </div>
       ) : (
         <main className="grid">
-          {books.map((b) => (
+          {shown.map((b) => (
             <div key={b.id} className={`book ${b.missing ? "missing" : ""}`} onClick={() => !b.missing && nav(`/read/${b.id}`)} title={b.missing ? "ファイルが見つかりません" : b.title}>
               <BookCover book={b} />
               <button className="more" aria-label="編集" onClick={(e) => { e.stopPropagation(); setEditing(b); }}>⋯</button>
@@ -129,6 +148,11 @@ export default function Library() {
           onClose={() => setEditing(null)}
           onSaved={() => { load(); loadTags(); }}
           onTagsChanged={loadTags}
+          onDeleted={() => {
+            load();
+            loadTags();
+            if (missingCount <= 1) setParam("missing", "");
+          }}
         />
       )}
       {managingTags && <TagManager tags={tags} onClose={() => setManagingTags(false)} onChanged={() => { loadTags(); load(); }} />}
