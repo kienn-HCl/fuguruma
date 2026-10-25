@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { api, Book, Highlight, Locator, Note } from "../api";
 import { useStatus } from "../App";
 import AiPanel from "../components/AiPanel";
@@ -23,6 +23,7 @@ function loadSettings(): ReaderSettings {
 export default function Reader() {
   const { id = "" } = useParams();
   const nav = useNavigate();
+  const [params, setParams] = useSearchParams();
   const status = useStatus();
   const view = useRef<ReaderHandle>(null);
   const [book, setBook] = useState<Book | null>(null);
@@ -38,13 +39,20 @@ export default function Reader() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
   const [focusHl, setFocusHl] = useState<string | null>(null);
+  const [zoom, setZoom] = useState(1); // PDF only
   const lastSaved = useRef(0);
 
   useEffect(() => {
+    // ?at=<locator JSON> opens the book at a specific place (e.g. a link from a note).
+    let at: Locator | null = null;
+    try {
+      at = params.get("at") ? (JSON.parse(params.get("at")!) as Locator) : null;
+    } catch { /* ignore a malformed link */ }
+    if (params.has("at")) setParams({}, { replace: true });
     api.book(id).then((b) => {
       setBook(b);
-      setInitial(b.progress?.locator ?? null);
-      if (b.progress) setPos({ loc: b.progress.locator, pct: b.progress.percent, label: "" });
+      setInitial(at ?? b.progress?.locator ?? null);
+      if (b.progress && !at) setPos({ loc: b.progress.locator, pct: b.progress.percent, label: "" });
     });
     api.highlights(id).then(setHighlights);
     api.notes({ bookId: id }).then(setNotes);
@@ -163,16 +171,6 @@ export default function Reader() {
 
   return (
     <div className={`reader ${immersive && !panel ? "immersive" : ""}`} data-theme={settings.theme}>
-      <div className="reader-bar">
-        <button className="icon-btn" onClick={() => nav("/")} aria-label="本棚へ">‹</button>
-        <button className={`icon-btn ${panel === "toc" ? "active" : ""}`} onClick={() => togglePanel("toc")} title="目次">☰</button>
-        <div className="title">{book.title}</div>
-        <button className={`icon-btn ${panel === "settings" ? "active" : ""}`} onClick={() => togglePanel("settings")} title="表示設定">Aa</button>
-        <button className={`icon-btn ${panel === "highlights" ? "active" : ""}`} onClick={() => togglePanel("highlights")} title="ハイライト">🖍</button>
-        <button className={`icon-btn ${panel === "notes" ? "active" : ""}`} onClick={() => togglePanel("notes")} title="ノート">✎</button>
-        <button className={`icon-btn ${panel === "ai" ? "active" : ""}`} onClick={() => togglePanel("ai")} title="AI">✦</button>
-      </div>
-
       <div className="reader-body">
         <div className="viewer">
           <View
@@ -187,6 +185,7 @@ export default function Reader() {
             onSelect={onSelect}
             onHighlightClick={onHighlightClick}
             onCenterTap={onCenterTap}
+            zoom={zoom}
           />
         </div>
 
@@ -274,19 +273,45 @@ export default function Reader() {
         )}
       </div>
 
-      <div className="reader-foot">
-        <span style={{ maxWidth: "40%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{pos.label}</span>
-        <input
-          type="range"
-          min={0}
-          max={1000}
-          value={Math.round(pos.pct * 1000)}
-          onChange={(e) => setPos((p) => ({ ...p, pct: Number(e.target.value) / 1000 }))}
-          onPointerUp={(e) => view.current?.goToPercent(Number((e.target as HTMLInputElement).value) / 1000)}
-          onKeyUp={(e) => view.current?.goToPercent(Number((e.target as HTMLInputElement).value) / 1000)}
-        />
-        <span>{Math.round(pos.pct * 100)}%</span>
-      </div>
+      {/* Controls live at the bottom, within thumb reach on phones (same layout on PC). */}
+      <footer className="reader-dock">
+        <div className="reader-progress">
+          <span className="label">{pos.label}</span>
+          <input
+            type="range"
+            min={0}
+            max={1000}
+            aria-label="読書位置"
+            value={Math.round(pos.pct * 1000)}
+            onChange={(e) => setPos((p) => ({ ...p, pct: Number(e.target.value) / 1000 }))}
+            onPointerUp={(e) => view.current?.goToPercent(Number((e.target as HTMLInputElement).value) / 1000)}
+            onKeyUp={(e) => view.current?.goToPercent(Number((e.target as HTMLInputElement).value) / 1000)}
+          />
+          <span>{Math.round(pos.pct * 100)}%</span>
+        </div>
+        <div className="reader-toolbar">
+          <button className="icon-btn" onClick={() => nav("/")} aria-label="本棚へ" title="本棚へ">‹</button>
+          <div className="title" title={book.title}>{book.title}</div>
+          {book.format === "pdf" && (
+            <div className="zoom" role="group" aria-label="拡大縮小">
+              <button className="icon-btn" onClick={() => setZoom((z) => Math.max(0.5, z - 0.25))} aria-label="縮小">－</button>
+              <button className="zoom-level" onClick={() => setZoom(1)} title="ページ全体を表示">{Math.round(zoom * 100)}%</button>
+              <button className="icon-btn" onClick={() => setZoom((z) => Math.min(4, z + 0.25))} aria-label="拡大">＋</button>
+            </div>
+          )}
+          {([
+            ["toc", "☰", "目次"],
+            ["settings", "Aa", "表示設定"],
+            ["highlights", "🖍", "ハイライト"],
+            ["notes", "✎", "ノート"],
+            ["ai", "✦", "AI"],
+          ] as [PanelTab, string, string][]).map(([t, icon, label]) => (
+            <button key={t} className={`icon-btn ${panel === t ? "active" : ""}`} onClick={() => togglePanel(t)} title={label} aria-label={label}>
+              {icon}
+            </button>
+          ))}
+        </div>
+      </footer>
 
       {sel && <SelectionPopup sel={sel} aiEnabled={status.aiEnabled} onHighlight={addHighlight} onAsk={() => askAI(sel.text, sel.context, sel.locator)} onQuote={() => { quoteToNote(sel.text); clearSel(); }} onCopy={() => { navigator.clipboard.writeText(sel.text); clearSel(); toast("コピーしました"); }} />}
     </div>
@@ -304,9 +329,10 @@ function SelectionPopup({
   onCopy: () => void;
 }) {
   // Place below the selection (above if near the bottom) so native mobile menus don't overlap.
-  const below = sel.rect.bottom + 70 < window.innerHeight;
+  const below = sel.rect.bottom + 70 < window.innerHeight - 96; // keep clear of the bottom dock
   const top = below ? sel.rect.bottom + 12 : Math.max(8, sel.rect.top - 56);
-  const left = Math.min(Math.max(sel.rect.left + sel.rect.width / 2, 170), window.innerWidth - 170);
+  const half = Math.min(210, window.innerWidth / 2); // the popup wraps to fit narrow screens
+  const left = Math.min(Math.max(sel.rect.left + sel.rect.width / 2, half), window.innerWidth - half);
   return (
     <div className="sel-pop" style={{ top, left }} onMouseDown={(e) => e.preventDefault()}>
       {Object.entries(highlightColors).slice(0, 4).map(([name, c]) => (
@@ -314,7 +340,7 @@ function SelectionPopup({
       ))}
       <span className="sep" />
       <button onClick={() => onHighlight("yellow", true)}>メモ</button>
-      <button onClick={onQuote}>引用</button>
+      <button onClick={onQuote} title="開いているノートに引用を追記">引用</button>
       {aiEnabled && <button onClick={onAsk}>✦ AIに聞く</button>}
       <button onClick={onCopy}>コピー</button>
     </div>

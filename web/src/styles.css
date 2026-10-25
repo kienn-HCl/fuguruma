@@ -157,37 +157,56 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 /* ---------- reader ---------- */
 .reader { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--rbg); color: var(--rfg); }
-.reader[data-theme="light"] { --rbg: #ffffff; --rfg: #222; }
-.reader[data-theme="sepia"] { --rbg: #f4ecd8; --rfg: #5b4636; }
+/* Each reader theme defines the whole palette, so panels, buttons and popups
+   follow the reader theme rather than the OS light/dark setting. */
+.reader[data-theme="light"] {
+  --rbg: #ffffff; --rfg: #222;
+  --bg: #f7f4ee; --surface: #ffffff; --surface-2: #efebe3; --text: #2a2723; --muted: #7a736a;
+  --border: #e0d9cd; --accent: #b5523b; --accent-text: #ffffff; color-scheme: light;
+}
+.reader[data-theme="sepia"] {
+  --rbg: #f4ecd8; --rfg: #5b4636;
+  --bg: #efe5cc; --surface: #faf4e6; --surface-2: #ece2c8; --text: #4a3a2c; --muted: #8a7660;
+  --border: #dccfb2; --accent: #a8573c; --accent-text: #ffffff; color-scheme: light;
+}
 .reader[data-theme="dark"] {
   --rbg: #161616; --rfg: #d6d2ca;
-  /* Panels and popups follow the reader's dark theme regardless of the OS setting. */
   --bg: #1b1a18; --surface: #222120; --surface-2: #2f2d2a; --text: #e8e3da; --muted: #9a938a;
   --border: #3a3733; --accent: #e07a5f; --accent-text: #1b1a18; color-scheme: dark;
 }
-.reader-bar {
-  display: flex; align-items: center; gap: 4px; padding: 6px 8px; padding-top: max(6px, env(safe-area-inset-top));
-  border-bottom: 1px solid color-mix(in srgb, var(--rfg) 12%, transparent);
-  transition: opacity 0.2s, transform 0.2s; z-index: 5; background: var(--rbg);
-}
-.reader-bar .title { flex: 1; min-width: 0; text-align: center; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.75; }
-.reader-bar .icon-btn { color: var(--rfg); }
-.reader-bar .icon-btn:hover, .reader-bar .icon-btn.active { background: color-mix(in srgb, var(--rfg) 10%, transparent); }
-.reader.immersive .reader-bar { opacity: 0; pointer-events: none; }
 .reader-body { flex: 1; display: flex; min-height: 0; position: relative; }
 .viewer { flex: 1; position: relative; min-width: 0; }
-.reader-foot {
-  display: flex; align-items: center; gap: 10px; padding: 4px 16px; padding-bottom: max(4px, env(safe-area-inset-bottom));
-  font-size: 12px; opacity: 0.6; transition: opacity 0.2s;
-}
-.reader.immersive .reader-foot { opacity: 0.35; }
-.reader-foot input[type="range"] { flex: 1; accent-color: var(--accent); }
 
-.epub-view { position: absolute; inset: 12px 0 0; }
-.epub-view > div { height: 100%; }
+/* Bottom dock: progress row + toolbar (within thumb reach on phones). */
+.reader-dock {
+  z-index: 5; background: var(--rbg); color: var(--rfg);
+  border-top: 1px solid color-mix(in srgb, var(--rfg) 12%, transparent);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.reader-progress { display: flex; align-items: center; gap: 10px; padding: 6px 16px 0; font-size: 12px; opacity: 0.7; }
+.reader-progress .label { max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.reader-progress input[type="range"] { flex: 1; accent-color: var(--accent); }
+.reader-toolbar { display: flex; align-items: center; gap: 2px; padding: 2px 8px 6px; transition: opacity 0.2s; }
+.reader-toolbar .title { flex: 1; min-width: 0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; opacity: 0.75; padding: 0 6px; }
+.reader-toolbar .icon-btn { color: var(--rfg); width: 40px; height: 40px; }
+.reader-toolbar .icon-btn:hover, .reader-toolbar .icon-btn.active { background: color-mix(in srgb, var(--rfg) 10%, transparent); }
+.reader-toolbar .zoom { display: flex; align-items: center; margin-right: 6px; border: 1px solid color-mix(in srgb, var(--rfg) 18%, transparent); border-radius: 10px; }
+.reader-toolbar .zoom .icon-btn { width: 34px; height: 34px; }
+.reader-toolbar .zoom-level { border: none; background: none; color: var(--rfg); font-size: 12px; min-width: 44px; cursor: pointer; padding: 0; }
+@media (max-width: 480px) {
+  .reader-toolbar .icon-btn { width: 36px; }
+  .reader-toolbar .zoom .icon-btn { width: 28px; }
+  .reader-toolbar .zoom-level { min-width: 38px; }
+}
+/* Tapping the middle of the page hides the toolbar; the progress row stays as a faint line. */
+.reader.immersive .reader-toolbar { display: none; }
+.reader.immersive .reader-progress { opacity: 0.35; padding-bottom: 6px; }
+
+.epub-reader { position: absolute; inset: max(12px, env(safe-area-inset-top)) 0 0; }
+.epub-reader > div { height: 100%; }
 .loading { position: absolute; inset: 0; display: grid; place-items: center; opacity: 0.6; }
 
-.pdf-view { position: absolute; inset: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 12px; }
+.pdf-view { position: absolute; inset: 0; overflow: auto; display: flex; justify-content: center; align-items: flex-start; padding: 12px; padding-top: max(12px, env(safe-area-inset-top)); }
 .pdf-page { position: relative; background: #fff; box-shadow: var(--shadow); margin: auto; }
 .pdf-page canvas { display: block; }
 .pdf-hl { position: absolute; inset: 0; pointer-events: none; z-index: 1; }
@@ -199,6 +218,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
   position: fixed; z-index: 30; display: flex; align-items: center; gap: 2px; padding: 4px;
   background: #2a2723; color: #fff; border-radius: 10px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.3);
   transform: translateX(-50%);
+  max-width: calc(100vw - 16px); flex-wrap: wrap; justify-content: center;
 }
 .sel-pop button { background: none; border: none; color: inherit; padding: 6px 9px; border-radius: 7px; cursor: pointer; font-size: 13px; white-space: nowrap; }
 .sel-pop button:hover { background: rgb(255 255 255 / 0.12); }
@@ -335,3 +355,5 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: color-mix(in srgb, #e6a23c 16%, var(--surface)); border: 1px solid var(--border);
 }
 .danger-zone { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); }
+
+/* pinned notes */

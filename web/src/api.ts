@@ -273,3 +273,8 @@ export function uploadBook(file: File, tagIds: number[], onProgress?: (p: number
     xhr.send(form);
   });
 }
+
+/** Link that opens a book at the given position. */
+export function readerUrl(bookId: string, locator?: Locator | null) {
+  return locator ? `/read/${bookId}?at=${encodeURIComponent(JSON.stringify(locator))}` : `/read/${bookId}`;
+}
