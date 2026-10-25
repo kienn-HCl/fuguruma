@@ -1,9 +1,22 @@
 name: CI
 
+# Changes to documentation alone (README, docs/, screenshots) skip CI.
+# THIRD_PARTY_NOTICES.md is checked against the dependencies, so it still runs.
 on:
   push:
     branches: [main]
+    paths: &code
+      - "**"
+      - "!**.md"
+      - "!docs/**"
+      - "THIRD_PARTY_NOTICES.md"
   pull_request:
+    paths: *code
+
+# A new push to a pull request cancels its running CI; every commit on main is checked.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
