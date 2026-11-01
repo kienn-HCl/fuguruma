@@ -7,6 +7,7 @@ import BookNote from "../components/BookNote";
 import MemoCard, { MemoActions } from "../components/MemoCard";
 import { toast } from "../components/Toast";
 import { hasContent } from "../memos";
+import { bookOpened, keepProgress, pendingProgress, savedFile, useOnline } from "../offline";
 import EpubView from "../reader/EpubView";
 import MemoMargin from "../reader/MemoMargin";
 import PdfView from "../reader/PdfView";
@@ -69,6 +70,9 @@ export default function Reader() {
   const [viewerWidth, setViewerWidth] = useState(0);
   const [layoutTick, setLayoutTick] = useState(0);
   const lastSaved = useRef(0);
+  const online = useOnline();
+  // The book file saved on this device (null: not saved; undefined: still checking).
+  const [file, setFile] = useState<ArrayBuffer | null | undefined>(undefined);
 
   useEffect(() => {
     // ?at=<locator JSON> opens the book at a specific place, ?memo=<id> shows a memo, ?conv=<id> opens an AI conversation.
@@ -79,10 +83,16 @@ export default function Reader() {
     const memo = params.get("memo");
     const conv = params.get("conv");
     if (params.toString()) setParams({}, { replace: true });
+    setFile(undefined);
+    savedFile(id).then(setFile, () => setFile(null));
     api.book(id).then((b) => {
+      // A position read offline that the server has not received yet wins if it is newer.
+      const local = pendingProgress(id);
+      const progress = local && local.updatedAt > (b.progress?.updatedAt ?? 0) ? (local as typeof b.progress) : b.progress;
       setBook(b);
-      setInitial(at ?? b.progress?.locator ?? null);
-      if (b.progress && !at) setPos({ loc: b.progress.locator, pct: b.progress.percent, label: "" });
+      setInitial(at ?? progress?.locator ?? null);
+      if (progress && !at) setPos({ loc: progress.locator, pct: progress.percent, label: "" });
+      bookOpened(b);
     });
     api.memos(id).then(setMemos);
     api.conversations(id).then(setConvs);
@@ -117,12 +127,13 @@ export default function Reader() {
     const t = setTimeout(() => {
       const updatedAt = Date.now();
       lastSaved.current = updatedAt;
+      const p = { locator: pos.loc, percent: pos.pct, updatedAt };
       fetch(`/api/books/${id}/progress`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ locator: pos.loc, percent: pos.pct, updatedAt }),
+        body: JSON.stringify(p),
         keepalive: true,
-      }).catch(() => {});
+      }).catch(() => keepProgress(id, p)); // offline: sent when the connection is back
     }, 1200);
     return () => clearTimeout(t);
   }, [pos.loc, pos.pct, id]);
@@ -275,7 +286,7 @@ export default function Reader() {
     },
   };
 
-  if (!book || initial === undefined) return <div className="loading">読み込み中…</div>;
+  if (!book || initial === undefined || file === undefined) return <div className="loading">読み込み中…</div>;
 
   const View = book.format === "pdf" ? PdfView : EpubView;
 
@@ -286,6 +297,7 @@ export default function Reader() {
           <View
             ref={view}
             url={api.fileUrl(book.id)}
+            data={file ?? undefined}
             bookId={book.id}
             initial={initial}
             marks={marks}
@@ -368,7 +380,7 @@ export default function Reader() {
                   onJump={jump}
                   onShowMemo={showMemo}
                   onSaved={onSaved}
-                  enabled={status.aiEnabled}
+                  enabled={status.aiEnabled && online}
                 />
               )}
               {panel === "settings" && <SettingsPanel settings={settings} onChange={setSettings} isPdf={book.format === "pdf"} />}
@@ -427,6 +439,7 @@ export default function Reader() {
         <SelectionPopup
           sel={sel}
           aiEnabled={status.aiEnabled}
+          canWrite={online}
           onHighlight={(c) => createFromSelection(c, "highlight")}
           onMemo={() => createFromSelection("yellow", "write")}
           onAsk={() => createFromSelection("yellow", "ask")}
@@ -504,10 +517,12 @@ function ZoomControl({ zoom, factor, onChange }: { zoom: PdfZoom; factor: number
 }
 
 function SelectionPopup({
-  sel, aiEnabled, onHighlight, onMemo, onAsk, onCopy,
+  sel, aiEnabled, canWrite, onHighlight, onMemo, onAsk, onCopy,
 }: {
   sel: Selection;
   aiEnabled: boolean;
+  /** Offline only copying is offered (memos are read-only). */
+  canWrite: boolean;
   onHighlight: (color: string) => void;
   onMemo: () => void;
   onAsk: () => void;
@@ -520,12 +535,16 @@ function SelectionPopup({
   const left = Math.min(Math.max(sel.rect.left + sel.rect.width / 2, half), window.innerWidth - half);
   return (
     <div className="sel-pop" style={{ top, left }} onMouseDown={(e) => e.preventDefault()}>
-      {Object.entries(highlightColors).slice(0, 4).map(([name, c]) => (
-        <button key={name} className="swatch" style={{ background: c }} title={`ハイライト（${name}）`} onClick={() => onHighlight(name)} />
-      ))}
-      <span className="sep" />
-      <button onClick={onMemo} title="この箇所にメモを書く">メモ</button>
-      {aiEnabled && <button onClick={onAsk} title="この箇所について AI に聞く（会話はメモに紐づきます）">✦ AIに聞く</button>}
+      {canWrite && (
+        <>
+          {Object.entries(highlightColors).slice(0, 4).map(([name, c]) => (
+            <button key={name} className="swatch" style={{ background: c }} title={`ハイライト（${name}）`} onClick={() => onHighlight(name)} />
+          ))}
+          <span className="sep" />
+          <button onClick={onMemo} title="この箇所にメモを書く">メモ</button>
+          {aiEnabled && <button onClick={onAsk} title="この箇所について AI に聞く（会話はメモに紐づきます）">✦ AIに聞く</button>}
+        </>
+      )}
       <button onClick={onCopy}>コピー</button>
     </div>
   );

@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { AIPatch, AIProvider, api, Settings } from "../api";
 import { useStatus } from "../App";
 import { toast } from "../components/Toast";
+import { formatSize } from "../components/BookEditModal";
+import { offlineSupported, recentCount, removeBook, setRecentCount, useOfflineEntries } from "../offline";
 
 const providerLabels: Record<AIProvider, string> = {
   none: "使わない",
@@ -192,6 +194,8 @@ export default function SettingsPage() {
 
         <PasswordCard passwordSet={s.auth.passwordSet} envLocked={env.has("auth.password")} onChanged={() => api.settings().then(load).then(status.refresh)} />
 
+        <OfflineCard />
+
         <section className="card">
           <h2>サーバー</h2>
           <p className="small muted">以下は設定ファイルで変更し、サーバーを再起動すると反映されます。</p>
@@ -204,6 +208,68 @@ export default function SettingsPage() {
         </section>
       </main>
     </>
+  );
+}
+
+/** Books saved on this device for offline reading (a per-device setting, kept in the browser). */
+function OfflineCard() {
+  const entries = Object.values(useOfflineEntries()).sort((a, b) => b.openedAt - a.openedAt);
+  const [recent, setRecent] = useState(recentCount);
+  const [usage, setUsage] = useState<string>("");
+  const total = entries.reduce((n, e) => n + e.size, 0);
+
+  useEffect(() => {
+    navigator.storage?.estimate?.().then((e) => e.quota && setUsage(`${formatSize(e.usage ?? 0)} / ${formatSize(e.quota)}`));
+    // Ask the browser not to evict saved books under storage pressure.
+    navigator.storage?.persist?.().catch(() => {});
+  }, [entries.length]);
+
+  return (
+    <section className="card">
+      <h2>オフライン（この端末）</h2>
+      {!offlineSupported ? (
+        <p className="small muted">
+          この接続ではオフライン保存を使えません。HTTPS（または localhost）で開くと、本をこの端末に保存してオフラインで読めます。
+        </p>
+      ) : (
+        <>
+          <p className="small muted" style={{ marginTop: 0 }}>
+            この端末に保存した本は、電波がなくても読めます（メモ・ノートは読むだけ）。本の「⋯」から保存できます。この設定はこの端末にだけ保存されます。
+          </p>
+          <Field label="最近開いた本を自動で保存" hint="開いた本のうち新しいものから、この冊数まで自動で保存します（手動で保存した本は数えません）。">
+            <select
+              className="input"
+              style={{ width: "auto" }}
+              value={recent}
+              onChange={(e) => {
+                setRecentCount(Number(e.target.value));
+                setRecent(Number(e.target.value));
+              }}
+            >
+              {[0, 1, 3, 5, 10].map((n) => (
+                <option key={n} value={n}>{n === 0 ? "保存しない" : `${n} 冊`}</option>
+              ))}
+            </select>
+          </Field>
+          <div className="field">
+            <label>保存済みの本（{entries.length} 冊・{formatSize(total)}{usage && `／ブラウザの使用量 ${usage}`}）</label>
+            {entries.length === 0 ? (
+              <p className="small muted" style={{ margin: 0 }}>まだありません。</p>
+            ) : (
+              <ul className="offline-list">
+                {entries.map((e) => (
+                  <li key={e.book.id} className="row">
+                    <span className="name" title={e.book.title}>{e.book.title}</span>
+                    <span className="small muted">{e.mode === "manual" ? "保存" : "最近"}・{formatSize(e.size)}</span>
+                    <button type="button" className="btn ghost small" onClick={() => removeBook(e.book.id)}>削除</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </>
+      )}
+    </section>
   );
 }
 

@@ -1,5 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "./Markdown";
+import { useOnline } from "../offline";
+import { toast } from "./Toast";
 
 /**
  * Markdown shown as rendered text; clicking it switches to a textarea that
@@ -18,6 +20,7 @@ export default function InlineMarkdown({
   onEditingChange?: (v: boolean) => void;
   className?: string;
 }) {
+  const online = useOnline();
   const [own, setOwn] = useState(false);
   const isEditing = editing ?? own;
   const setEditing = (v: boolean) => {
@@ -103,9 +106,10 @@ export default function InlineMarkdown({
       title="クリックして編集"
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("a")) return;
+        if (!online) return void toast("オフライン中は編集できません");
         setEditing(true);
       }}
-      onKeyDown={(e) => e.key === "Enter" && setEditing(true)}
+      onKeyDown={(e) => e.key === "Enter" && online && setEditing(true)}
     >
       {text.trim() ? <Markdown text={text} /> : <span className="placeholder">{placeholder}</span>}
     </div>

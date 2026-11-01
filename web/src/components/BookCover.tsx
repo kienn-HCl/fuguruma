@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { api, Book } from "../api";
+import { OfflineMode } from "../offline";
 
 const palette = ["#7c5e4b", "#4b6b7c", "#5e7c4b", "#7c4b6b", "#4b4f7c", "#7c6f4b", "#3f6f63", "#8a4f3d"];
 function hash(s: string) {
@@ -8,7 +9,7 @@ function hash(s: string) {
   return Math.abs(h);
 }
 
-export default function BookCover({ book }: { book: Book }) {
+export default function BookCover({ book, saved }: { book: Book; saved?: OfflineMode }) {
   const [failed, setFailed] = useState(false);
   const showImg = book.hasCover && !failed;
   return (
@@ -22,6 +23,14 @@ export default function BookCover({ book }: { book: Book }) {
         </div>
       )}
       <span className="fmt">{book.format}</span>
+      {saved && (
+        <span
+          className={`saved ${saved}`}
+          title={saved === "manual" ? "この端末に保存済み（オフラインで読めます）" : "最近開いた本として自動で保存済み（オフラインで読めます）"}
+        >
+          ⤓ {saved === "manual" ? "保存" : "最近"}
+        </span>
+      )}
     </div>
   );
 }

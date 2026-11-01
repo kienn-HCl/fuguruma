@@ -8,6 +8,7 @@ import TagManager from "../components/TagManager";
 import UploadModal from "../components/UploadModal";
 import { toast } from "../components/Toast";
 import { renderPdfCover } from "../reader/pdfjs";
+import { clearOffline, updateSavedBooks, useOfflineEntries, useOnline } from "../offline";
 
 export default function Library() {
   const status = useStatus();
@@ -17,6 +18,10 @@ export default function Library() {
   const sort = params.get("sort") || "recent";
   // Books whose file has gone missing are hidden unless this filter is on.
   const showMissing = params.get("missing") === "1";
+  const online = useOnline();
+  const saved = useOfflineEntries();
+  // Offline, only books saved on this device can be opened.
+  const onlySaved = params.get("saved") === "1" || !online;
   const [q, setQ] = useState(params.get("q") || "");
   const [books, setBooks] = useState<Book[] | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -34,7 +39,15 @@ export default function Library() {
   };
 
   const load = useCallback(() => {
-    api.books({ q: params.get("q") || undefined, tag: tag || undefined, sort }).then(setBooks);
+    api
+      .books({ q: params.get("q") || undefined, tag: tag || undefined, sort })
+      .then((list) => {
+        setBooks(list);
+        if (navigator.onLine) updateSavedBooks(list);
+      })
+      // No connection and nothing cached: list the saved books.
+      .catch(() => setBooks(Object.values(saved).map((e) => e.book)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params, tag, sort]);
   const loadTags = useCallback(() => api.tags().then(setTags), []);
 
@@ -51,7 +64,8 @@ export default function Library() {
   }, [q]);
 
   const missingCount = books?.filter((b) => b.missing).length ?? 0;
-  const shown = books && books.filter((b) => b.missing === showMissing);
+  const savedCount = Object.keys(saved).length;
+  const shown = books && books.filter((b) => b.missing === showMissing && (!onlySaved || saved[b.id]));
 
   usePdfCovers(books, (id) => setBooks((bs) => bs && bs.map((b) => (b.id === id ? { ...b, hasCover: true, updatedAt: Date.now() } : b))));
 
@@ -79,11 +93,17 @@ export default function Library() {
           <option value="added">追加順</option>
           <option value="title">タイトル順</option>
         </select>
-        <button className="icon-btn" title="再スキャン" onClick={scan} disabled={scanning}>{scanning ? "…" : "⟳"}</button>
+        {online && <button className="icon-btn" title="再スキャン" onClick={scan} disabled={scanning}>{scanning ? "…" : "⟳"}</button>}
         <Link className="icon-btn" title="ノート" to="/notes" style={{ textDecoration: "none", color: "inherit" }}>✎</Link>
         <Link className="icon-btn" title="設定" to="/settings" style={{ textDecoration: "none", color: "inherit" }}>⚙</Link>
         {status.authRequired && (
-          <button className="icon-btn" title="ログアウト" onClick={() => api.logout().then(() => location.reload())}>⎋</button>
+          <button
+            className="icon-btn"
+            title="ログアウト（この端末に保存した本も消えます）"
+            onClick={() => api.logout().then(clearOffline).then(() => location.reload())}
+          >
+            ⎋
+          </button>
         )}
       </header>
 
@@ -96,6 +116,16 @@ export default function Library() {
             <span className="muted">{t.count}</span>
           </button>
         ))}
+        {(savedCount > 0 || onlySaved) && (
+          <button
+            className={`chip ${onlySaved ? "active" : ""}`}
+            onClick={() => online && setParam("saved", onlySaved ? "" : "1")}
+            title="この端末に保存した本（オフラインで読めます）"
+          >
+            ⤓ この端末
+            <span className="muted">{savedCount}</span>
+          </button>
+        )}
         {(missingCount > 0 || showMissing) && (
           <button className={`chip ${showMissing ? "active" : ""}`} onClick={() => setParam("missing", showMissing ? "" : "1")} title="ファイルが見つからない本">
             見つからない本
@@ -111,7 +141,12 @@ export default function Library() {
         </p>
       )}
 
-      {shown === null ? null : shown.length === 0 && showMissing ? (
+      {shown === null ? null : shown.length === 0 && onlySaved ? (
+        <div className="empty">
+          この端末に保存した本はありません。<br />
+          <span className="small">本の「⋯」から保存できます。最近開いた本も自動で保存されます（設定で変更できます）。</span>
+        </div>
+      ) : shown.length === 0 && showMissing ? (
         <div className="empty">ファイルが見つからない本はありません。</div>
       ) : shown.length === 0 ? (
         <div className="empty">
@@ -127,7 +162,7 @@ export default function Library() {
         <main className="grid">
           {shown.map((b) => (
             <div key={b.id} className={`book ${b.missing ? "missing" : ""}`} onClick={() => !b.missing && nav(`/read/${b.id}`)} title={b.missing ? "ファイルが見つかりません" : b.title}>
-              <BookCover book={b} />
+              <BookCover book={b} saved={saved[b.id]?.mode} />
               <button className="more" aria-label="編集" onClick={(e) => { e.stopPropagation(); setEditing(b); }}>⋯</button>
               <div className="meta">
                 <div className="t">{b.title}</div>
@@ -157,7 +192,7 @@ export default function Library() {
       )}
       {managingTags && <TagManager tags={tags} onClose={() => setManagingTags(false)} onChanged={() => { loadTags(); load(); }} />}
 
-      {status.uploadEnabled && (
+      {status.uploadEnabled && online && (
         <button className="fab" onClick={() => setUploading([])} aria-label="本を追加" title="本を追加（ファイルをドロップしても追加できます）">
           ＋<span className="fab-label">本を追加</span>
         </button>
