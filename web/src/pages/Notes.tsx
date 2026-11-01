@@ -5,10 +5,12 @@ import { useStatus } from "../App";
 import BookNote from "../components/BookNote";
 import { MemoActions } from "../components/MemoCard";
 import NoteEditor from "../components/NoteEditor";
+import { useOnline } from "../offline";
 
 export default function Notes() {
   const { id } = useParams();
   const nav = useNavigate();
+  const online = useOnline();
   const [q, setQ] = useState("");
   const [notes, setNotes] = useState<Note[]>([]);
   const [current, setCurrent] = useState<Note | null>(null);
@@ -47,8 +49,9 @@ export default function Notes() {
         <Link to="/" className="brand"><img src="/favicon.svg" alt="" />文車</Link>
         <strong>ノート</strong>
         <div className="spacer" />
-        <button className="btn primary" onClick={create} title="本に紐づかないノートを作ります">＋ 新規</button>
+        {online && <button className="btn primary" onClick={create} title="本に紐づかないノートを作ります">＋ 新規</button>}
       </header>
+      {!online && <p className="notice" style={{ marginTop: 8 }}>オフラインです。以前に開いたノートだけを読めます（編集はできません）。</p>}
       <div className={`notes-layout ${id ? "has-note" : ""}`}>
         <aside className="notes-list">
           <div style={{ padding: 10 }}>

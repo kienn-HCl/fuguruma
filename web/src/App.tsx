@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { api, Status } from "./api";
 import Library from "./pages/Library";
 import Reader from "./pages/Reader";
@@ -16,6 +16,7 @@ export const useStatus = () => useContext(StatusCtx);
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
   const online = useOnline();
+  const inReader = useLocation().pathname.startsWith("/read/");
   const refresh = useCallback(
     () =>
       api
@@ -60,7 +61,8 @@ export default function App() {
         <Route path="/notes/:id" element={<Notes />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
-      {!online && <div className="offline-banner" role="status" title="この端末に保存した本を読めます（メモ・ノートは読むだけ）">オフライン</div>}
+      {/* Other pages explain being offline in a notice; the reader has no room for one. */}
+      {!online && inReader && <div className="offline-banner" role="status" title="この端末に保存した本を読めます（メモ・ノートは読むだけ）">オフライン</div>}
       <ToastHost />
     </StatusCtx.Provider>
   );
