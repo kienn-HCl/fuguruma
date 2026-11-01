@@ -3,6 +3,7 @@ import { api, Conversation, Memo, Note } from "../api";
 import { compareLocators, sortMemos } from "../memos";
 import InlineMarkdown from "./InlineMarkdown";
 import MemoCard, { MemoActions } from "./MemoCard";
+import { useOnline } from "../offline";
 
 /**
  * The note of a book: a Markdown introduction, then every memo in reading
@@ -23,6 +24,7 @@ export default function BookNote({
   onNoteChange: (n: Note) => void;
   onMemoCreated: (m: Memo) => void;
 }) {
+  const online = useOnline(); // offline, the note is read-only
   const [title, setTitle] = useState(note.title);
   const [fresh, setFresh] = useState<string | null>(null); // text memo just added: open in the editor
   const root = useRef<HTMLDivElement>(null);
@@ -57,6 +59,7 @@ export default function BookNote({
           className="editor-title"
           value={title}
           placeholder={`${bookTitle} 読書メモ`}
+          readOnly={!online}
           onChange={(e) => setTitle(e.target.value)}
           onBlur={() => title !== note.title && saveNote({ title })}
         />
@@ -85,10 +88,12 @@ export default function BookNote({
                 onDone={(v) => !v.trim() && actions.onDelete(m)}
                 onSave={(body) => actions.onChange(m, { body })}
               />
-              <button className="icon-btn note-text-del" onClick={() => actions.onDelete(m)} aria-label="この文章を削除" title="この文章を削除">×</button>
+              {online && (
+                <button className="icon-btn note-text-del" onClick={() => actions.onDelete(m)} aria-label="この文章を削除" title="この文章を削除">×</button>
+              )}
             </div>
           )}
-          <button className="note-insert" onClick={() => addText(m, i)} title="ここに文章を追加">＋ 文章</button>
+          {online && <button className="note-insert" onClick={() => addText(m, i)} title="ここに文章を追加">＋ 文章</button>}
         </div>
       ))}
     </div>

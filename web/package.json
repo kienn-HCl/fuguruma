@@ -7,7 +7,7 @@
     "predev": "node scripts/copy-pdfjs.mjs",
     "dev": "vite",
     "prebuild": "node scripts/copy-pdfjs.mjs",
-    "build": "tsc -b && vite build && node -e \"require('fs').writeFileSync('dist/.gitkeep','')\"",
+    "build": "tsc -b && vite build && node scripts/build-sw.mjs && node -e \"require('fs').writeFileSync('dist/.gitkeep','')\"",
     "typecheck": "tsc -b"
   },
   "dependencies": {

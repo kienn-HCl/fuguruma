@@ -78,7 +78,8 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
   useEffect(() => {
     let cancelled = false;
     let loaded: PDFDocumentProxy | null = null;
-    openPdf(props.url)
+    // pdf.js hands the bytes to its worker, so give it a copy it may keep.
+    openPdf(props.data ? props.data.slice(0) : props.url)
       .then(async (d) => {
         if (cancelled) return d.loadingTask.destroy();
         loaded = d;
@@ -90,7 +91,7 @@ const PdfView = forwardRef<ReaderHandle, ReaderViewProps>(function PdfView(props
       cancelled = true;
       loaded?.loadingTask.destroy();
     };
-  }, [props.url]);
+  }, [props.url, props.data]);
 
   useEffect(() => {
     const ro = new ResizeObserver(([e]) => setSize({ w: e.contentRect.width, h: e.contentRect.height }));

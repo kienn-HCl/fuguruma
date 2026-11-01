@@ -5,10 +5,10 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 export { pdfjs };
 
-/** Opens a PDF using HTTP range requests so only the needed parts are fetched. */
-export function openPdf(url: string) {
+/** Opens a PDF from its URL (with HTTP range requests, so only the needed parts are fetched) or from its bytes. */
+export function openPdf(src: string | ArrayBuffer) {
   return pdfjs.getDocument({
-    url,
+    ...(typeof src === "string" ? { url: src } : { data: src }),
     disableAutoFetch: true,
     disableStream: true,
     rangeChunkSize: 256 * 1024,

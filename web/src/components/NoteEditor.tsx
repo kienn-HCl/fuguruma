@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, Note } from "../api";
 import Markdown from "./Markdown";
+import { useOnline } from "../offline";
 
 type Mode = "edit" | "preview" | "split";
 
@@ -14,6 +15,7 @@ export default function NoteEditor({
   onBack?: () => void;
   compact?: boolean;
 }) {
+  const online = useOnline(); // offline, notes are read-only
   const [title, setTitle] = useState(note.title);
   const [body, setBody] = useState(note.body);
   const [mode, setMode] = useState<Mode>(() => (compact || window.innerWidth < 900 ? "edit" : "split"));
@@ -64,7 +66,7 @@ export default function NoteEditor({
     <div className="editor">
       <div className="editor-head">
         {onBack && <button className="icon-btn" onClick={onBack} aria-label="戻る">‹</button>}
-        <input className="editor-title" value={title} placeholder="無題のノート" onChange={(e) => setTitle(e.target.value)} />
+        <input className="editor-title" value={title} placeholder="無題のノート" readOnly={!online} onChange={(e) => setTitle(e.target.value)} />
         <span className="small muted">{saved ? "保存済み" : "保存中…"}</span>
       </div>
       <div className="row" style={{ padding: "6px 10px", borderBottom: "1px solid var(--border)", flexWrap: "wrap" }}>
@@ -80,11 +82,11 @@ export default function NoteEditor({
               {{ edit: "編集", split: "並べる", preview: "プレビュー" }[m]}
             </button>
           ))}
-        {onDelete && <button className="btn ghost small danger" onClick={onDelete}>削除</button>}
+        {onDelete && online && <button className="btn ghost small danger" onClick={onDelete}>削除</button>}
       </div>
       <div className={`editor-body ${mode === "split" ? "split" : ""}`}>
         {mode !== "preview" && (
-          <textarea ref={ta} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Markdown で書けます" />
+          <textarea ref={ta} value={body} readOnly={!online} onChange={(e) => setBody(e.target.value)} placeholder="Markdown で書けます" />
         )}
         {mode !== "edit" && <Markdown text={body || "*（空のノート）*"} />}
       </div>

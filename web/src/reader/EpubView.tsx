@@ -66,7 +66,7 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
   }));
 
   useEffect(() => {
-    const book = ePub(props.url, { openAs: "epub" });
+    const book = props.data ? ePub(props.data) : ePub(props.url, { openAs: "epub" });
     bookRef.current = book;
     const rendition = book.renderTo(el.current!, {
       width: "100%",
@@ -197,7 +197,7 @@ const EpubView = forwardRef<ReaderHandle, ReaderViewProps>(function EpubView(pro
       applied.current.clear();
       book.destroy();
     };
-  }, [props.url, props.bookId]);
+  }, [props.url, props.bookId, props.data]);
 
   // epub.js only re-lays out on window resize; also follow the container
   // (e.g. when the side panel opens or closes).

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, Book, Tag } from "../api";
 import Modal from "./Modal";
+import { offlineSupported, removeBook, saveBook, useOfflineEntries, useOnline } from "../offline";
 import { toast } from "./Toast";
 
 export default function BookEditModal({
@@ -95,6 +96,7 @@ export default function BookEditModal({
           <button className="btn" onClick={addTag}>追加</button>
         </div>
       </div>
+      {offlineSupported && !book.missing && <OfflineField book={book} />}
       <p className="small muted" style={{ wordBreak: "break-all" }}>{book.path}</p>
       <div className="row" style={{ justifyContent: "flex-end" }}>
         <button className="btn ghost" onClick={onClose}>キャンセル</button>
@@ -110,6 +112,55 @@ export default function BookEditModal({
       )}
     </Modal>
   );
+}
+
+/** Save the book on this device for reading offline, or forget it. */
+function OfflineField({ book }: { book: Book }) {
+  const entry = useOfflineEntries()[book.id];
+  const online = useOnline();
+  const [progress, setProgress] = useState<number | null>(null);
+
+  const save = async () => {
+    setProgress(0);
+    try {
+      await saveBook(book, "manual", setProgress);
+      toast(`「${book.title}」をこの端末に保存しました`);
+    } catch (e) {
+      toast((e as Error).message);
+    } finally {
+      setProgress(null);
+    }
+  };
+
+  return (
+    <div className="field">
+      <label>オフライン</label>
+      <div className="row" style={{ flexWrap: "wrap" }}>
+        {progress !== null ? (
+          <span className="small">保存中… {Math.round(progress * 100)}%</span>
+        ) : entry?.mode === "manual" ? (
+          <>
+            <span className="small">⤓ この端末に保存済み（{formatSize(entry.size)}）</span>
+            <button className="btn small" onClick={() => removeBook(book.id)}>保存を解除</button>
+          </>
+        ) : (
+          <>
+            <span className="small muted">
+              {entry ? `最近開いた本として自動で保存済み（${formatSize(entry.size)}）` : "この端末には保存されていません"}
+            </span>
+            <button className="btn small" onClick={save} disabled={!online} title="オフラインでも読めるように、本とメモをこの端末に保存します">
+              ⤓ この端末に保存
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function formatSize(bytes: number) {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
 export function randomColor() {

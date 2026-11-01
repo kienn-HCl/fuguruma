@@ -1,6 +1,7 @@
 import { Conversation, Memo } from "../api";
 import { highlightColors } from "../reader/types";
 import InlineMarkdown from "./InlineMarkdown";
+import { useOnline } from "../offline";
 
 export interface MemoActions {
   onChange: (m: Memo, p: { color?: string; body?: string }) => Promise<unknown> | void;
@@ -30,6 +31,7 @@ export default function MemoCard({
   onEditingChange?: (v: boolean) => void;
   aiEnabled: boolean;
 }) {
+  const online = useOnline(); // offline, memos are read-only
   const color = highlightColors[memo.color] ?? memo.color;
   const details = variant !== "margin" || active;
   return (
@@ -67,7 +69,7 @@ export default function MemoCard({
           ))}
         </div>
       )}
-      {details && (
+      {details && online && (
         <div className="memo-actions">
           {Object.entries(highlightColors).map(([name, c]) => (
             <button

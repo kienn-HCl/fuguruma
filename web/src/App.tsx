@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { api, Status } from "./api";
 import Library from "./pages/Library";
 import Reader from "./pages/Reader";
@@ -7,6 +7,7 @@ import Notes from "./pages/Notes";
 import Login from "./pages/Login";
 import SettingsPage from "./pages/Settings";
 import { ToastHost } from "./components/Toast";
+import { flushProgress, useOnline } from "./offline";
 
 type StatusCtxValue = Status & { refresh: () => Promise<void> };
 const StatusCtx = createContext<StatusCtxValue>({ authRequired: false, loggedIn: true, aiEnabled: false, aiProvider: "none", uploadEnabled: false, uploadMaxMb: 0, refresh: async () => {} });
@@ -14,7 +15,32 @@ export const useStatus = () => useContext(StatusCtx);
 
 export default function App() {
   const [status, setStatus] = useState<Status | null>(null);
-  const refresh = useCallback(() => api.status().then(setStatus), []);
+  const online = useOnline();
+  const inReader = useLocation().pathname.startsWith("/read/");
+  const refresh = useCallback(
+    () =>
+      api
+        .status()
+        .then((s) => {
+          setStatus(s);
+          try {
+            localStorage.setItem("fuguruma:status", JSON.stringify(s));
+          } catch { /* ignore */ }
+        })
+        .catch(() => {
+          // Offline without a cached answer: assume the last known state so saved books can be read.
+          try {
+            const last = JSON.parse(localStorage.getItem("fuguruma:status") || "null");
+            if (last) setStatus(last);
+          } catch { /* ignore */ }
+        }),
+    [],
+  );
+
+  // Reading positions recorded offline are sent once the connection is back.
+  useEffect(() => {
+    if (online) flushProgress();
+  }, [online]);
 
   useEffect(() => {
     refresh();
@@ -35,6 +61,8 @@ export default function App() {
         <Route path="/notes/:id" element={<Notes />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
+      {/* Other pages explain being offline in a notice; the reader has no room for one. */}
+      {!online && inReader && <div className="offline-banner" role="status" title="この端末に保存した本を読めます（メモ・ノートは読むだけ）">オフライン</div>}
       <ToastHost />
     </StatusCtx.Provider>
   );

@@ -55,6 +55,8 @@ export interface ReaderHandle {
 
 export interface ReaderViewProps {
   url: string;
+  /** The book file saved on this device; when given it is read instead of url. */
+  data?: ArrayBuffer;
   bookId: string;
   initial: Locator | null;
   marks: Mark[];
