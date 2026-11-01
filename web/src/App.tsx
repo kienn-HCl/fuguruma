@@ -60,7 +60,7 @@ export default function App() {
         <Route path="/notes/:id" element={<Notes />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Routes>
-      {!online && <div className="offline-banner" role="status">オフライン：この端末に保存した本を読めます（メモ・ノートは読むだけ）</div>}
+      {!online && <div className="offline-banner" role="status" title="この端末に保存した本を読めます（メモ・ノートは読むだけ）">オフライン</div>}
       <ToastHost />
     </StatusCtx.Provider>
   );

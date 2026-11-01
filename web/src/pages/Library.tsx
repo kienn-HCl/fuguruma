@@ -135,6 +135,9 @@ export default function Library() {
         <button className="chip" onClick={() => setManagingTags(true)}>＋ タグ管理</button>
       </nav>
 
+      {!online && (
+        <p className="notice">オフラインです。この端末に保存した本だけを表示しています。メモ・ノートは読むだけで、つながると読書位置が同期されます。</p>
+      )}
       {showMissing && (
         <p className="notice">
           ファイルが見つからない本です。メモやハイライトは残っています。ファイルを本のディレクトリに戻す（場所や名前は変わっていても構いません）か、同じファイルをアップロードし直すと元に戻ります。不要な本は「⋯」から本棚から削除できます。
